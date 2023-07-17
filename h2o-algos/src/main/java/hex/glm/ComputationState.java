@@ -14,6 +14,7 @@ import water.Job;
 import water.MemoryManager;
 import water.fvec.Frame;
 import water.util.ArrayUtils;
+import water.util.IcedHashMap;
 import water.util.Log;
 import water.util.MathUtils;
 
@@ -21,6 +22,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.stream.IntStream;
 
+import static hex.glm.ConstrainedGLMUtils.LinearConstraints;
 import static hex.glm.GLMModel.GLMParameters.Family.gaussian;
 import static hex.glm.GLMUtils.calSmoothNess;
 import static hex.glm.GLMUtils.copyGInfo;
@@ -47,6 +49,9 @@ public final class ComputationState {
   private double _gMax; // store max value of original gradient without dividing by math.max(1e-2, _parms._alpha[0])
   private DataInfo _activeData;
   private BetaConstraint _activeBC = null;
+  LinearConstraints[] _equalityConstraints = null;
+  LinearConstraints[] _lessThanEqualToConstraints = null;
+  LinearConstraints[] _fromBetaConstraints = null;
   private final GLM.BetaInfo _modelBetaInfo;
   private double[] _beta; // vector of coefficients corresponding to active data
   private double[] _ubeta;  // HGLM, store coefficients of random effects;
@@ -512,6 +517,11 @@ public final class ComputationState {
   public void setBC(BetaConstraint bc) {
     _bc = bc;
     _activeBC = _bc;
+  }
+  
+  public void setLinearConstraints(LinearConstraints[] equalityC, LinearConstraints[] lessThanEualToC) {
+     _equalityConstraints = equalityC;
+     _lessThanEqualToConstraints = lessThanEualToC;
   }
 
   public void setActiveClass(int activeClass) {_activeClass = activeClass;}

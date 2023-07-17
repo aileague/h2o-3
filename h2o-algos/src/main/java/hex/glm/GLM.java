@@ -51,6 +51,8 @@ import static hex.gam.MatrixFrameUtils.GamUtils.copy2DArray;
 import static hex.gam.MatrixFrameUtils.GamUtils.keepFrameKeys;
 import static hex.glm.ComputationState.extractSubRange;
 import static hex.glm.ComputationState.fillSubRange;
+import static hex.glm.ConstrainedGLMUtils.extractBetaConstraints;
+import static hex.glm.ConstrainedGLMUtils.extractLinearConstraints;
 import static hex.glm.DispersionUtils.*;
 import static hex.glm.GLMModel.GLMParameters;
 import static hex.glm.GLMModel.GLMParameters.CHECKPOINT_NON_MODIFIABLE_FIELDS;
@@ -973,7 +975,9 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
           removePredictors(_parms, _train);
       }
       if (_parms._max_iterations == 0)
-        error("_max_iterations", H2O.technote(2, "if specified, must be >= 1."));
+        warn("max_iterations", " must be >= 1 to obtain proper model.  Setting it to be 0 will only" +
+                " return the correct coefficient names and an empty model.");
+        //error("_max_iterations", H2O.technote(2, "if specified, must be >= 1."));
       if (error_count() > 0) return;
       if (_parms._lambda_search && (_parms._stopping_rounds > 0)) {
         error("early stop", " cannot run when lambda_search=True.  Lambda_search has its own " +
@@ -1184,6 +1188,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
           _enumInCS = true; // make sure we only do this once
         }
       }
+      if (_parms._expose_constraints && _parms._linear_constraints == null)
+        error("_expose_constraints", " can only be enabled when there are linear constraints.");
       BetaConstraint bc = _parms._beta_constraints != null ? new BetaConstraint(_parms._beta_constraints.get()) 
               : new BetaConstraint();
       if (betaContsOn && !_betaConstraintsOn) {
@@ -1195,6 +1201,9 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       if (bc.hasBounds() && _parms._early_stopping)
         warn("beta constraint and early_stopping", "if both are enabled may degrade model performance.");
       _state.setBC(bc);
+      if (_parms._linear_constraints != null) {
+        checkAssignLinearConstraints();
+      }
       if(hasOffsetCol() && _parms._intercept && !ordinal.equals(_parms._family)) { // fit intercept
         GLMGradientSolver gslvr = gam.equals(_parms._glmType) ? new GLMGradientSolver(_job,_parms, 
                 _dinfo.filterExpandedColumns(new int[0]), 0, _state.activeBC(), _betaInfo, _penaltyMatrix, _gamColIndices) 
@@ -1341,7 +1350,21 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       buildModel();
     }
   }
-
+  
+  void checkAssignLinearConstraints() {
+    if (!IRLSM.equals(_parms._solver)) {
+      error("solver", "constrained GLM is only available for IRLSM.  PLease set solver to" +
+              " IRLSM/irlsm explicitly.");
+    } else {
+      // extract constraints from beta_constraints into one constraints
+      if (_parms._beta_constraints != null) 
+        extractBetaConstraints(_state, _dinfo.coefNames());
+      // extract constraints from linear_constraints into equality of lessthanequalto constraints
+      extractLinearConstraints(_state, _parms._linear_constraints, _dinfo);
+      // make sure constraints have full rank.  If not, generate messages stating what constraints are redundant, error out
+    }
+  }
+  
   /**
    * initialize the following parameters for HGLM from either user initial inputs or from a GLM model if user did not 
    * provide any starting values.
@@ -3578,177 +3601,186 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       if (error_count() > 0)
         throw H2OModelBuilderIllegalArgumentException.makeFromBuilder(GLM.this);
       _model._output._start_time = System.currentTimeMillis(); //quickfix to align output duration with other models
-      if (_parms._lambda_search) {
-        if (ordinal.equals(_parms._family))
-          nullDevTrain = new GLMResDevTaskOrdinal(_job._key, _state._dinfo, getNullBeta(), _nclass).doAll(_state._dinfo._adaptedFrame).avgDev();
-        else
-          nullDevTrain = multinomial.equals(_parms._family)
-                  ? new GLMResDevTaskMultinomial(_job._key, _state._dinfo, getNullBeta(), _nclass).doAll(_state._dinfo._adaptedFrame).avgDev()
-                  : new GLMResDevTask(_job._key, _state._dinfo, _parms, getNullBeta()).doAll(_state._dinfo._adaptedFrame).avgDev();
-        if (_validDinfo != null) {
+      if (_parms._expose_constraints) {
+        _model._output._fromBetaConstraints = _state._fromBetaConstraints;
+        _model._output._equalityConstraints = _state._equalityConstraints;
+        _model._output._lessThanEqualToConstraints = _state._lessThanEqualToConstraints;
+      }
+      if (_parms._max_iterations == 0) {
+        return;
+      } else {
+        if (_parms._lambda_search) {
           if (ordinal.equals(_parms._family))
-            nullDevValid = new GLMResDevTaskOrdinal(_job._key, _validDinfo, getNullBeta(), _nclass).doAll(_validDinfo._adaptedFrame).avgDev();
+            nullDevTrain = new GLMResDevTaskOrdinal(_job._key, _state._dinfo, getNullBeta(), _nclass).doAll(_state._dinfo._adaptedFrame).avgDev();
           else
-            nullDevValid = multinomial.equals(_parms._family)
-                    ? new GLMResDevTaskMultinomial(_job._key, _validDinfo, getNullBeta(), _nclass).doAll(_validDinfo._adaptedFrame).avgDev()
-                    : new GLMResDevTask(_job._key, _validDinfo, _parms, getNullBeta()).doAll(_validDinfo._adaptedFrame).avgDev();
+            nullDevTrain = multinomial.equals(_parms._family)
+                    ? new GLMResDevTaskMultinomial(_job._key, _state._dinfo, getNullBeta(), _nclass).doAll(_state._dinfo._adaptedFrame).avgDev()
+                    : new GLMResDevTask(_job._key, _state._dinfo, _parms, getNullBeta()).doAll(_state._dinfo._adaptedFrame).avgDev();
+          if (_validDinfo != null) {
+            if (ordinal.equals(_parms._family))
+              nullDevValid = new GLMResDevTaskOrdinal(_job._key, _validDinfo, getNullBeta(), _nclass).doAll(_validDinfo._adaptedFrame).avgDev();
+            else
+              nullDevValid = multinomial.equals(_parms._family)
+                      ? new GLMResDevTaskMultinomial(_job._key, _validDinfo, getNullBeta(), _nclass).doAll(_validDinfo._adaptedFrame).avgDev()
+                      : new GLMResDevTask(_job._key, _validDinfo, _parms, getNullBeta()).doAll(_validDinfo._adaptedFrame).avgDev();
+          }
+          _workPerIteration = WORK_TOTAL / _parms._nlambdas;
+        } else
+          _workPerIteration = 1 + (WORK_TOTAL / _parms._max_iterations);
+
+        if (!Solver.L_BFGS.equals(_parms._solver) && (multinomial.equals(_parms._family) ||
+                ordinal.equals(_parms._family))) {
+          Vec[] vecs = genGLMVectors(_dinfo, getNullBeta());
+          addGLMVec(vecs, false, _dinfo);
         }
-        _workPerIteration = WORK_TOTAL / _parms._nlambdas;
-      } else
-        _workPerIteration = 1 + (WORK_TOTAL / _parms._max_iterations);
 
-      if (!Solver.L_BFGS.equals(_parms._solver) && (multinomial.equals(_parms._family) || 
-              ordinal.equals(_parms._family))) {
-        Vec[] vecs = genGLMVectors(_dinfo, getNullBeta());
-        addGLMVec(vecs, false, _dinfo);
-      }
+        if (_parms._HGLM) { // add w, augZ, etaOld and random columns to response for easy access inside _dinfo
+          addWdataZiEtaOld2Response();
+        }
 
-      if (_parms._HGLM) { // add w, augZ, etaOld and random columns to response for easy access inside _dinfo
-        addWdataZiEtaOld2Response();
-      }
+        double oldDevTrain = nullDevTrain;
+        double oldDevTest = nullDevValid;
+        double[] devHistoryTrain = new double[5];
+        double[] devHistoryTest = new double[5];
 
-      double oldDevTrain = nullDevTrain;
-      double oldDevTest = nullDevValid;
-      double[] devHistoryTrain = new double[5];
-      double[] devHistoryTest = new double[5];
+        if (!_parms._HGLM) {  // only need these for non HGLM
+          _ginfoStart = GLMUtils.copyGInfo(_state.ginfo());
+          _betaDiffStart = _state.getBetaDiff();
+        }
 
-      if (!_parms._HGLM) {  // only need these for non HGLM
-        _ginfoStart = GLMUtils.copyGInfo(_state.ginfo());
-        _betaDiffStart = _state.getBetaDiff();
-      }
+        if (_parms.hasCheckpoint()) { // restore _state parameters
+          _state.copyCheckModel2State(_model, _gamColIndices);
+          if (_model._output._submodels.length == 1)
+            _model._output._submodels = null; // null out submodel only for single alpha/lambda values
+        }
 
-      if (_parms.hasCheckpoint()) { // restore _state parameters
-        _state.copyCheckModel2State(_model, _gamColIndices);
-        if (_model._output._submodels.length == 1)
-          _model._output._submodels = null; // null out submodel only for single alpha/lambda values
-      }
+        if (!_parms._lambda_search & !_parms._HGLM)
+          updateProgress(false);
 
-      if (!_parms._lambda_search & !_parms._HGLM)
-        updateProgress(false);
-
-      // alpha, lambda search loop
-      int alphaStart = 0;
-      int lambdaStart = 0;
-      int submodelCount = 0;
-      if (_parms.hasCheckpoint() && _model._output._submodels != null) {  // multiple alpha/lambdas or lambda search
-        submodelCount = Family.gaussian.equals(_parms._family) ? _model._output._submodels.length
-                : _model._output._submodels.length - 1;
-        alphaStart = submodelCount / _parms._lambda.length;
-        lambdaStart = submodelCount % _parms._lambda.length;
-      }
-      _model._output._lambda_array_size = _parms._lambda.length;
-      for (int alphaInd = alphaStart; alphaInd < _parms._alpha.length; alphaInd++) {
-        _state.setAlpha(_parms._alpha[alphaInd]);   // loop through the alphas
-        if ((!_parms._HGLM) && (alphaInd > 0) && !_checkPointFirstIter) // no need for cold start during the first iteration
-          coldStart(devHistoryTrain, devHistoryTest);  // reset beta, lambda, currGram
-        for (int i = lambdaStart; i < _parms._lambda.length; ++i) {  // for lambda search, can quit before it is done
-          if (_job.stop_requested() || (timeout() && _model._output._submodels.length > 0))
-            break;  //need at least one submodel on timeout to avoid issues.
-          if (_parms._max_iterations != -1 && _state._iter >= _parms._max_iterations)
-            break;  // iterations accumulate across all lambda/alpha values when coldstart = false
-          if ((!_parms._HGLM && (_parms._cold_start || (!_parms._lambda_search && _parms._cold_start))) && (i > 0)
-                  && !_checkPointFirstIter) // default: cold_start for non lambda_search
-            coldStart(devHistoryTrain, devHistoryTest);
-          Submodel sm = computeSubmodel(submodelCount, _parms._lambda[i], nullDevTrain, nullDevValid);
-          if (_checkPointFirstIter)
-            _checkPointFirstIter = false;
-          double trainDev = sm.devianceTrain; // this is stupid, they are always -1 except for lambda_search=True
-          double testDev = sm.devianceValid;
-          devHistoryTest[submodelCount % devHistoryTest.length] =
-                  (oldDevTest - testDev) / oldDevTest; // only remembers 5
-          oldDevTest = testDev;
-          devHistoryTrain[submodelCount % devHistoryTrain.length] =
-                  (oldDevTrain - trainDev) / oldDevTrain;
-          oldDevTrain = trainDev;
-          if (_parms._lambda[i] < _lmax && Double.isNaN(_lambdaCVEstimate) /** if we have cv lambda estimate we should use it, can not stop before reaching it */) {
-            if (_parms._early_stopping && _state._iter >= devHistoryTrain.length) {
-              double s = ArrayUtils.maxValue(devHistoryTrain);
-              if (s < 1e-4) {
-                Log.info(LogMsg("converged at lambda[" + i + "] = " + _parms._lambda[i] + "alpha[" + alphaInd + "] = "
-                        + _parms._alpha[alphaInd] + ", improvement on train = " + s));
-                break; // started overfitting
-              }
-              if (_validDinfo != null && _parms._nfolds <= 1) { // check for early stopping on test with no xval
-                s = ArrayUtils.maxValue(devHistoryTest);
-                if (s < 0) {
-                  Log.info(LogMsg("converged at lambda[" + i + "] = " + _parms._lambda[i] + "alpha[" + alphaInd +
-                          "] = " + _parms._alpha[alphaInd] + ", improvement on test = " + s));
+        // alpha, lambda search loop
+        int alphaStart = 0;
+        int lambdaStart = 0;
+        int submodelCount = 0;
+        if (_parms.hasCheckpoint() && _model._output._submodels != null) {  // multiple alpha/lambdas or lambda search
+          submodelCount = Family.gaussian.equals(_parms._family) ? _model._output._submodels.length
+                  : _model._output._submodels.length - 1;
+          alphaStart = submodelCount / _parms._lambda.length;
+          lambdaStart = submodelCount % _parms._lambda.length;
+        }
+        _model._output._lambda_array_size = _parms._lambda.length;
+        for (int alphaInd = alphaStart; alphaInd < _parms._alpha.length; alphaInd++) {
+          _state.setAlpha(_parms._alpha[alphaInd]);   // loop through the alphas
+          if ((!_parms._HGLM) && (alphaInd > 0) && !_checkPointFirstIter) // no need for cold start during the first iteration
+            coldStart(devHistoryTrain, devHistoryTest);  // reset beta, lambda, currGram
+          for (int i = lambdaStart; i < _parms._lambda.length; ++i) {  // for lambda search, can quit before it is done
+            if (_job.stop_requested() || (timeout() && _model._output._submodels.length > 0))
+              break;  //need at least one submodel on timeout to avoid issues.
+            if (_parms._max_iterations != -1 && _state._iter >= _parms._max_iterations)
+              break;  // iterations accumulate across all lambda/alpha values when coldstart = false
+            if ((!_parms._HGLM && (_parms._cold_start || (!_parms._lambda_search && _parms._cold_start))) && (i > 0)
+                    && !_checkPointFirstIter) // default: cold_start for non lambda_search
+              coldStart(devHistoryTrain, devHistoryTest);
+            Submodel sm = computeSubmodel(submodelCount, _parms._lambda[i], nullDevTrain, nullDevValid);
+            if (_checkPointFirstIter)
+              _checkPointFirstIter = false;
+            double trainDev = sm.devianceTrain; // this is stupid, they are always -1 except for lambda_search=True
+            double testDev = sm.devianceValid;
+            devHistoryTest[submodelCount % devHistoryTest.length] =
+                    (oldDevTest - testDev) / oldDevTest; // only remembers 5
+            oldDevTest = testDev;
+            devHistoryTrain[submodelCount % devHistoryTrain.length] =
+                    (oldDevTrain - trainDev) / oldDevTrain;
+            oldDevTrain = trainDev;
+            if (_parms._lambda[i] < _lmax && Double.isNaN(_lambdaCVEstimate) /** if we have cv lambda estimate we should use it, can not stop before reaching it */) {
+              if (_parms._early_stopping && _state._iter >= devHistoryTrain.length) {
+                double s = ArrayUtils.maxValue(devHistoryTrain);
+                if (s < 1e-4) {
+                  Log.info(LogMsg("converged at lambda[" + i + "] = " + _parms._lambda[i] + "alpha[" + alphaInd + "] = "
+                          + _parms._alpha[alphaInd] + ", improvement on train = " + s));
                   break; // started overfitting
+                }
+                if (_validDinfo != null && _parms._nfolds <= 1) { // check for early stopping on test with no xval
+                  s = ArrayUtils.maxValue(devHistoryTest);
+                  if (s < 0) {
+                    Log.info(LogMsg("converged at lambda[" + i + "] = " + _parms._lambda[i] + "alpha[" + alphaInd +
+                            "] = " + _parms._alpha[alphaInd] + ", improvement on test = " + s));
+                    break; // started overfitting
+                  }
                 }
               }
             }
-          }
 
-          if ((_parms._lambda_search || _parms._generate_scoring_history) && (_parms._score_each_iteration || 
-                  timeSinceLastScoring() > _scoringInterval || ((_parms._score_iteration_interval > 0) &&
-                  ((_state._iter % _parms._score_iteration_interval) == 0)))) {
-            _model._output.setSubmodelIdx(_model._output._best_submodel_idx = submodelCount, _parms); // quick and easy way to set submodel parameters
-            scoreAndUpdateModel(); // update partial results
+            if ((_parms._lambda_search || _parms._generate_scoring_history) && (_parms._score_each_iteration ||
+                    timeSinceLastScoring() > _scoringInterval || ((_parms._score_iteration_interval > 0) &&
+                    ((_state._iter % _parms._score_iteration_interval) == 0)))) {
+              _model._output.setSubmodelIdx(_model._output._best_submodel_idx = submodelCount, _parms); // quick and easy way to set submodel parameters
+              scoreAndUpdateModel(); // update partial results
+            }
+            _job.update(_workPerIteration, "iter=" + _state._iter + " lmb=" +
+                    lambdaFormatter.format(_state.lambda()) + " alpha=" + lambdaFormatter.format(_state.alpha()) +
+                    "deviance trn/tst= " + devFormatter.format(trainDev) + "/" + devFormatter.format(testDev) +
+                    " P=" + ArrayUtils.countNonzeros(_state.beta()));
+            submodelCount++;  // updata submodel index count here
           }
-          _job.update(_workPerIteration, "iter=" + _state._iter + " lmb=" +
-                  lambdaFormatter.format(_state.lambda()) + " alpha=" + lambdaFormatter.format(_state.alpha()) +
-                  "deviance trn/tst= " + devFormatter.format(trainDev) + "/" + devFormatter.format(testDev) +
-                  " P=" + ArrayUtils.countNonzeros(_state.beta()));
-          submodelCount++;  // updata submodel index count here
         }
-      }
-      // if beta constraint is enabled, check and make sure coefficients are within bounds
-      if (_betaConstraintsOn && betaConstraintsCheckEnabled())
-        checkCoeffsBounds();
-        
-      if (stop_requested() || _earlyStop) {
-        if (timeout()) {
-          Log.info("Stopping GLM training because of timeout");
-        } else if (_earlyStop) {
-          Log.info("Stopping GLM training due to hitting earlyStopping criteria.");
-        } else {
-          throw new Job.JobCancelledException();
+        // if beta constraint is enabled, check and make sure coefficients are within bounds
+        if (_betaConstraintsOn && betaConstraintsCheckEnabled())
+          checkCoeffsBounds();
+
+        if (stop_requested() || _earlyStop) {
+          if (timeout()) {
+            Log.info("Stopping GLM training because of timeout");
+          } else if (_earlyStop) {
+            Log.info("Stopping GLM training due to hitting earlyStopping criteria.");
+          } else {
+            throw new Job.JobCancelledException();
+          }
         }
-      }
-      if (_state._iter >= _parms._max_iterations)
-        _job.warn("Reached maximum number of iterations " + _parms._max_iterations + "!");
-      if (_parms._nfolds > 1 && !Double.isNaN(_lambdaCVEstimate) && _bestCVSubmodel < _model._output._submodels.length)
-        _model._output.setSubmodelIdx(_model._output._best_submodel_idx = _bestCVSubmodel, _model._parms);  // reset best_submodel_idx to what xval has found
-      else
-        _model._output.pickBestModel(_model._parms);
-      if (_vcov != null) { // should move this up, otherwise, scoring will never use info in _vcov
-        _model.setVcov(_vcov);
+        if (_state._iter >= _parms._max_iterations)
+          _job.warn("Reached maximum number of iterations " + _parms._max_iterations + "!");
+        if (_parms._nfolds > 1 && !Double.isNaN(_lambdaCVEstimate) && _bestCVSubmodel < _model._output._submodels.length)
+          _model._output.setSubmodelIdx(_model._output._best_submodel_idx = _bestCVSubmodel, _model._parms);  // reset best_submodel_idx to what xval has found
+        else
+          _model._output.pickBestModel(_model._parms);
+        if (_vcov != null) { // should move this up, otherwise, scoring will never use info in _vcov
+          _model.setVcov(_vcov);
+          _model.update(_job._key);
+        }
+        if (!_parms._HGLM) {  // no need to do for HGLM
+          _model._finalScoring = true; // enables likelihood calculation while scoring
+          scoreAndUpdateModel();
+          _model._finalScoring = false; // avoid calculating likelihood in case of further updates
+        }
+
+        if (dfbetas.equals(_parms._influence))
+          genRID();
+
+        if (_parms._generate_variable_inflation_factors) {
+          _model._output._vif_predictor_names = _model.buildVariableInflationFactors(_train, _dinfo);
+        }// build variable inflation factors for numerical predictors
+        TwoDimTable scoring_history_early_stop = ScoringInfo.createScoringHistoryTable(_model.getScoringInfo(),
+                (null != _parms._valid), false, _model._output.getModelCategory(), false, _parms.hasCustomMetricFunc());
+        _model._output._scoring_history = combineScoringHistory(_model._output._scoring_history,
+                scoring_history_early_stop);
+        _model._output._varimp = _model._output.calculateVarimp();
+        _model._output._variable_importances = calcVarImp(_model._output._varimp);
+
         _model.update(_job._key);
-      }
-      if (!_parms._HGLM) {  // no need to do for HGLM
-        _model._finalScoring = true; // enables likelihood calculation while scoring
-        scoreAndUpdateModel();
-        _model._finalScoring = false; // avoid calculating likelihood in case of further updates
-      }
-      
-      if (dfbetas.equals(_parms._influence))
-        genRID();
-      
-      if (_parms._generate_variable_inflation_factors) {
-        _model._output._vif_predictor_names = _model.buildVariableInflationFactors(_train, _dinfo);
-      }// build variable inflation factors for numerical predictors
-      TwoDimTable scoring_history_early_stop = ScoringInfo.createScoringHistoryTable(_model.getScoringInfo(),
-              (null != _parms._valid), false, _model._output.getModelCategory(), false, _parms.hasCustomMetricFunc());
-      _model._output._scoring_history = combineScoringHistory(_model._output._scoring_history,
-              scoring_history_early_stop);
-      _model._output._varimp = _model._output.calculateVarimp();
-      _model._output._variable_importances = calcVarImp(_model._output._varimp);
-      
-      _model.update(_job._key);
 /*      if (_vcov != null) {
         _model.setVcov(_vcov);
         _model.update(_job._key);
       }*/
-      if (!(_parms)._lambda_search && _state._iter < _parms._max_iterations) {
-        _job.update(_workPerIteration * (_parms._max_iterations - _state._iter));
-      }
-      if (_iceptAdjust != 0) { // apply the intercept adjust according to prior probability
-        assert _parms._intercept;
-        double[] b = _model._output._global_beta;
-        b[b.length - 1] += _iceptAdjust;
-        for (Submodel sm : _model._output._submodels)
-          sm.beta[sm.beta.length - 1] += _iceptAdjust;
-        _model.update(_job._key);
+        if (!(_parms)._lambda_search && _state._iter < _parms._max_iterations) {
+          _job.update(_workPerIteration * (_parms._max_iterations - _state._iter));
+        }
+        if (_iceptAdjust != 0) { // apply the intercept adjust according to prior probability
+          assert _parms._intercept;
+          double[] b = _model._output._global_beta;
+          b[b.length - 1] += _iceptAdjust;
+          for (Submodel sm : _model._output._submodels)
+            sm.beta[sm.beta.length - 1] += _iceptAdjust;
+          _model.update(_job._key);
+        }
       }
     }
 
@@ -4655,7 +4687,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     
     public BetaConstraint(Frame beta_constraints) {
      // beta_constraints = encodeCategoricalsIfPresent(beta_constraints); // null key
-      if (_enumInCS) {
+  if (_enumInCS) {
         if (_betaConstraints == null) {
           beta_constraints = expandedCatCS(_parms._beta_constraints.get(), _parms);
           DKV.put(beta_constraints);

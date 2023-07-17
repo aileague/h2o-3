@@ -70,6 +70,7 @@ reference:
       - h2o.clusterIsUp
       - h2o.clusterStatus
       - h2o.coef
+      - h2o.coef_names
       - h2o.coef_norm
       - h2o.coef_with_p_values
       - h2o.colnames

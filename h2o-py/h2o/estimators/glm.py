@@ -90,6 +90,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
                  cold_start=False,  # type: bool
                  lambda_min_ratio=-1.0,  # type: float
                  beta_constraints=None,  # type: Optional[Union[None, str, H2OFrame]]
+                 linear_constraints=None,  # type: Optional[Union[None, str, H2OFrame]]
                  max_active_predictors=-1,  # type: int
                  interactions=None,  # type: Optional[List[str]]
                  interaction_pairs=None,  # type: Optional[List[tuple]]
@@ -261,7 +262,8 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
         :param non_negative: Restrict coefficients (not intercept) to be non-negative
                Defaults to ``False``.
         :type non_negative: bool
-        :param max_iterations: Maximum number of iterations
+        :param max_iterations: Maximum number of iterations.  Value should >=1.  A value of 0 will only return the
+               modelcoefficients.
                Defaults to ``-1``.
         :type max_iterations: int
         :param objective_epsilon: Converge if  objective value changes less than this. Default (of -1.0) indicates: If
@@ -313,6 +315,12 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
         :param beta_constraints: Beta constraints
                Defaults to ``None``.
         :type beta_constraints: Union[None, str, H2OFrame], optional
+        :param linear_constraints: Linear constraints: used to specify linear constraints involving more than one
+               coefficients in standard form.  It is only supported for solver IRLSM.  It contains four columns: names
+               (for coefficient names or constant), values, types ('Equal' or 'LessThanEqual'), constraint_numbers (0
+               for first linear constraint, 2 for second linear constraint, ...
+               Defaults to ``None``.
+        :type linear_constraints: Union[None, str, H2OFrame], optional
         :param max_active_predictors: Maximum number of active predictors during computation. Use as a stopping
                criterion to prevent expensive model building with many predictors. Default indicates: If the IRLSM
                solver is used, the value of max_active_predictors is set to 5000 otherwise it is set to 100000000.
@@ -466,6 +474,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
         self.cold_start = cold_start
         self.lambda_min_ratio = lambda_min_ratio
         self.beta_constraints = beta_constraints
+        self.linear_constraints = linear_constraints
         self.max_active_predictors = max_active_predictors
         self.interactions = interactions
         self.interaction_pairs = interaction_pairs
@@ -1562,7 +1571,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
     @property
     def max_iterations(self):
         """
-        Maximum number of iterations
+        Maximum number of iterations.  Value should >=1.  A value of 0 will only return the modelcoefficients.
 
         Type: ``int``, defaults to ``-1``.
 
@@ -1885,6 +1894,22 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
                 lower_bounds.append(one_col_bounds.get('lower_bound'))
             constraints = h2o.H2OFrame(dict([("names",col_names), ("lower_bounds", lower_bounds), ("upper_bounds", upper_bounds)]))
             self._parms["beta_constraints"] = constraints[["names", "lower_bounds", "upper_bounds"]]
+
+    @property
+    def linear_constraints(self):
+        """
+        Linear constraints: used to specify linear constraints involving more than one coefficients in standard form.
+        It is only supported for solver IRLSM.  It contains four columns: names (for coefficient names or constant),
+        values, types ('Equal' or 'LessThanEqual'), constraint_numbers (0 for first linear constraint, 2 for second
+        linear constraint, ...
+
+        Type: ``Union[None, str, H2OFrame]``.
+        """
+        return self._parms.get("linear_constraints")
+
+    @linear_constraints.setter
+    def linear_constraints(self, linear_constraints):
+        self._parms["linear_constraints"] = H2OFrame._validate(linear_constraints, 'linear_constraints')
 
     @property
     def max_active_predictors(self):

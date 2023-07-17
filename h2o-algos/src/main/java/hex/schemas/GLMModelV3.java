@@ -63,6 +63,9 @@ public class GLMModelV3 extends ModelSchemaV3<GLMModel, GLMModelV3, GLMModel.GLM
     
     @API(help = "Predictor names where variable inflation factors are calculated.")
     String[] vif_predictor_names;
+
+    @API(help = "GLM model coefficients names.")
+    String[] coefficient_names;
     
     @API(help = "predictor variable inflation factors.")
     double[] variable_inflation_factors;
@@ -201,6 +204,7 @@ public class GLMModelV3 extends ModelSchemaV3<GLMModel, GLMModelV3, GLMModel.GLM
       alpha_best = impl.alpha_best();
       best_submodel_index = impl.bestSubmodelIndex();
       dispersion = impl.dispersion();
+      coefficient_names = impl.coefficientNames().clone();
       variable_inflation_factors = impl.getVariableInflationFactors();
       vif_predictor_names = impl.hasVIF() ? impl.getVIFPredictorNames() : null;
       List<String> validVIFNames = impl.hasVIF() ? Stream.of(vif_predictor_names).collect(Collectors.toList()) : null;
@@ -215,11 +219,13 @@ public class GLMModelV3 extends ModelSchemaV3<GLMModel, GLMModelV3, GLMModel.GLM
         random_coefficients_table.fillFromImpl(buildRandomCoefficients2DTable(impl.ubeta(), impl.randomcoefficientNames()));
       }
       double [] beta = impl.beta();
-      final double [] magnitudes = new double[beta.length];
-      int len = magnitudes.length - 1;
-      int[] indices = new int[len];
-      for (int i = 0; i < indices.length; ++i)
-        indices[i] = i;
+      final double [] magnitudes = beta==null?null:new double[beta.length];
+      int len = beta==null?0:magnitudes.length - 1;
+      int[] indices = beta==null?null:new int[len];
+      if (beta != null) {
+        for (int i = 0; i < indices.length; ++i)
+          indices[i] = i;
+      }
 
       if(beta == null) beta = MemoryManager.malloc8d(names.length);
       String [] colTypes = new String[]{"double"};

@@ -369,6 +369,7 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     public enum MissingValuesHandling {
       MeanImputation, PlugValues, Skip
     }
+    public enum Constraints {EqualTo, LessThanEqualTo}; 
     public String algoName() { return "GLM"; }
     public String fullName() { return "Generalized Linear Modeling"; }
     public String javaName() { return GLMModel.class.getName(); }
@@ -415,6 +416,8 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     public StringPair[] _interaction_pairs=null;
     public boolean _early_stopping = true;
     public Key<Frame> _beta_constraints = null;
+    public Key<Frame> _linear_constraints = null;
+    public boolean _expose_constraints = false; // internal parameter for testing only.
     public Key<Frame> _plug_values = null;
     // internal parameter, handle with care. GLM will stop when there is more than this number of active predictors (after strong rule screening)
     public int _max_active_predictors = -1;
@@ -1469,6 +1472,9 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     private double _dispersion;
     private boolean _dispersionEstimated;
     public int[] _activeColsPerClass;
+    public ConstrainedGLMUtils.LinearConstraints[] _equalityConstraints = null;
+    public ConstrainedGLMUtils.LinearConstraints[] _lessThanEqualToConstraints = null;
+    public ConstrainedGLMUtils.LinearConstraints[] _fromBetaConstraints = null;
     public boolean hasPValues(){return _zvalues != null;}
     public boolean hasVIF() { return _vif_predictor_names != null; }
 

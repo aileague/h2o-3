@@ -2629,6 +2629,37 @@ extract_scoring_history <- function(model, value) {
 }
 
 #'
+#' Return the GLM coefficient names without building the actual GLM model by setting max_iterations=0.
+#'
+#' @param object an \linkS4class{H2OModel} object.
+#' 
+#' @examples 
+#' \dontrun{
+#' library(h2o)
+#' h2o.init()
+#' 
+#' f <- "https://s3.amazonaws.com/h2o-public-test-data/smalldata/junit/cars_20mpg.csv"
+#' cars <- h2o.importFile(f)
+#' predictors <- c("displacement", "power", "weight", "acceleration", "year")
+#' response <- "cylinders"
+#' cars_glm <- h2o.glm(balance_classes = TRUE, 
+#'                     seed = 1234, 
+#'                     x = predictors, 
+#'                     y = response, 
+#'                     training_frame = cars,
+#'                     max_iterations=0)
+#' h2o.coef_names(cars_glm)
+#' }
+#' @export
+h2o.coef_names <- function(object) {
+    if (is(object, "H2OModel") &&
+        (object@algorithm %in% c("glm"))) {
+        coef_names = object@model$coefficient_names
+        return(coef_names[-length(coef_names)])
+    }
+}
+
+#'
 #' Return coefficients fitted on the standardized data (requires standardize = True, which is on by default). These coefficients can be used to evaluate variable importance.
 #'
 #' @param object an \linkS4class{H2OModel} object.

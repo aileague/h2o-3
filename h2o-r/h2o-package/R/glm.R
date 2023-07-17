@@ -78,7 +78,8 @@
 #' @param remove_collinear_columns \code{Logical}. In case of linearly dependent columns, remove some of the dependent columns Defaults to FALSE.
 #' @param intercept \code{Logical}. Include constant term in the model Defaults to TRUE.
 #' @param non_negative \code{Logical}. Restrict coefficients (not intercept) to be non-negative Defaults to FALSE.
-#' @param max_iterations Maximum number of iterations Defaults to -1.
+#' @param max_iterations Maximum number of iterations.  Value should >=1.  A value of 0 will only return the modelcoefficients.
+#'        Defaults to -1.
 #' @param objective_epsilon Converge if  objective value changes less than this. Default (of -1.0) indicates: If lambda_search is set to
 #'        True the value of objective_epsilon is set to .0001. If the lambda_search is set to False and lambda is equal
 #'        to zero, the value of objective_epsilon is set to .000001, for any other value of lambda the default value of
@@ -106,6 +107,10 @@
 #'        variables, then lambda_min_ratio is set to 0.0001; if the number of observations is less than the number of
 #'        variables, then lambda_min_ratio is set to 0.01. Defaults to -1.
 #' @param beta_constraints Beta constraints
+#' @param linear_constraints Linear constraints: used to specify linear constraints involving more than one coefficients in standard form.
+#'        It is only supported for solver IRLSM.  It contains four columns: names (for coefficient names or constant),
+#'        values, types ('Equal' or 'LessThanEqual'), constraint_numbers (0 for first linear constraint, 2 for second
+#'        linear constraint, ...
 #' @param max_active_predictors Maximum number of active predictors during computation. Use as a stopping criterion to prevent expensive model
 #'        building with many predictors. Default indicates: If the IRLSM solver is used, the value of
 #'        max_active_predictors is set to 5000 otherwise it is set to 100000000. Defaults to -1.
@@ -252,6 +257,7 @@ h2o.glm <- function(x,
                     cold_start = FALSE,
                     lambda_min_ratio = -1,
                     beta_constraints = NULL,
+                    linear_constraints = NULL,
                     max_active_predictors = -1,
                     interactions = NULL,
                     interaction_pairs = NULL,
@@ -411,6 +417,8 @@ h2o.glm <- function(x,
     parms$cold_start <- cold_start
   if (!missing(lambda_min_ratio))
     parms$lambda_min_ratio <- lambda_min_ratio
+  if (!missing(linear_constraints))
+    parms$linear_constraints <- linear_constraints
   if (!missing(max_active_predictors))
     parms$max_active_predictors <- max_active_predictors
   if (!missing(interaction_pairs))
@@ -535,6 +543,7 @@ h2o.glm <- function(x,
                                     cold_start = FALSE,
                                     lambda_min_ratio = -1,
                                     beta_constraints = NULL,
+                                    linear_constraints = NULL,
                                     max_active_predictors = -1,
                                     interactions = NULL,
                                     interaction_pairs = NULL,
@@ -699,6 +708,8 @@ h2o.glm <- function(x,
     parms$cold_start <- cold_start
   if (!missing(lambda_min_ratio))
     parms$lambda_min_ratio <- lambda_min_ratio
+  if (!missing(linear_constraints))
+    parms$linear_constraints <- linear_constraints
   if (!missing(max_active_predictors))
     parms$max_active_predictors <- max_active_predictors
   if (!missing(interaction_pairs))

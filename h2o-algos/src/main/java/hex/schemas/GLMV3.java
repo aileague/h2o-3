@@ -70,6 +70,7 @@ public class GLMV3 extends ModelBuilderSchema<GLM,GLMV3,GLMV3.GLMParametersV3> {
             "cold_start", // if true, will start GLM model from initial values and conditions
             "lambda_min_ratio",
             "beta_constraints",
+            "expose_constraints",
             "max_active_predictors",
             "interactions",
             "interaction_pairs",
@@ -172,7 +173,8 @@ public class GLMV3 extends ModelBuilderSchema<GLM,GLMV3,GLMV3.GLMParametersV3> {
     @API(help = "Restrict coefficients (not intercept) to be non-negative")
     public boolean non_negative;
 
-    @API(help = "Maximum number of iterations", level = Level.secondary)
+    @API(help = "Maximum number of iterations.  Value should >=1.  A value of 0 will only return the model" +
+            "coefficients.", level = Level.secondary)
     public int max_iterations;
 
     @API(help = "Converge if  beta changes less (using L-infinity norm) than beta esilon, ONLY applies to IRLSM solver ", level = Level.expert)
@@ -248,6 +250,13 @@ public class GLMV3 extends ModelBuilderSchema<GLM,GLMV3,GLMV3.GLMParametersV3> {
 
     @API(help = "Beta constraints", direction = API.Direction.INPUT /* Not required, to allow initial params validation: , required=true */)
     public FrameKeyV3 beta_constraints;
+
+    @API(help = "Linear constraints: used to specify linear constraints involving more than one coefficients in " +
+            "standard form.  It is only supported for solver IRLSM.  It contains four columns: names (strings for " +
+            "coefficient names or constant), values, types ( strings of 'Equal' or 'LessThanEqual'), constraint_numbers" +
+            " (0 for first linear constraint, 2 for second linear constraint, ...", 
+            direction = API.Direction.INPUT /* Not required, to allow initial params validation: , required=true */)
+    public FrameKeyV3 linear_constraints;
 
     @API(help="Maximum number of active predictors during computation. Use as a stopping criterion" +
     " to prevent expensive model building with many predictors." + " Default indicates: If the IRLSM solver is used," +
