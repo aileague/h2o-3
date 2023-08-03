@@ -181,7 +181,7 @@ public class ConstrainedGLMUtils {
       currentConstraint._constraints.put("constant", 0.0);  // put constant of 0.0
     if (currentConstraint._constraints.size() < 3)
       throw new IllegalArgumentException("linear constraint must have at least two coefficients.  For constraints on" +
-              " just one coefficient, use betaConstraints instead.");
+              " just one coefficient: "+ constraintF.vec("names").stringAt(0)+", use betaConstraints instead.");
     equalC.add(currentConstraint);
     rowIndices.removeAll(processedRowIndices);
   }
