@@ -46,7 +46,6 @@
 #' @param impute_original \code{Logical}. Reconstruct original training data by reversing transform Defaults to FALSE.
 #' @param recover_svd \code{Logical}. Recover singular values and eigenvectors of XY Defaults to FALSE.
 #' @param max_runtime_secs Maximum allowed runtime in seconds for model training. Use 0 to disable. Defaults to 0.
-#' @param export_checkpoints_dir Automatically export generated models to this directory.
 #' @return an object of class \linkS4class{H2ODimReductionModel}.
 #' @seealso \code{\link{h2o.kmeans}, \link{h2o.svd}}, \code{\link{h2o.prcomp}}
 #' @references M. Udell, C. Horn, R. Zadeh, S. Boyd (2014). {Generalized Low Rank Models}[https://arxiv.org/abs/1410.0342]. Unpublished manuscript, Stanford Electrical Engineering Department.
@@ -92,8 +91,7 @@ h2o.glrm <- function(training_frame,
                      expand_user_y = TRUE,
                      impute_original = FALSE,
                      recover_svd = FALSE,
-                     max_runtime_secs = 0,
-                     export_checkpoints_dir = NULL)
+                     max_runtime_secs = 0)
 {
   # Validate required training_frame first and other frame args: should be a valid key or an H2OFrame object
   training_frame <- .validate.H2OFrame(training_frame, required=TRUE)
@@ -170,8 +168,6 @@ h2o.glrm <- function(training_frame,
     parms$recover_svd <- recover_svd
   if (!missing(max_runtime_secs))
     parms$max_runtime_secs <- max_runtime_secs
-  if (!missing(export_checkpoints_dir))
-    parms$export_checkpoints_dir <- export_checkpoints_dir
 
   # Check if user_y is an acceptable set of user-specified starting points
   if( is.data.frame(user_y) || is.matrix(user_y) || is.list(user_y) || is.H2OFrame(user_y) ) {
@@ -247,7 +243,6 @@ h2o.glrm <- function(training_frame,
                                      impute_original = FALSE,
                                      recover_svd = FALSE,
                                      max_runtime_secs = 0,
-                                     export_checkpoints_dir = NULL,
                                      segment_columns = NULL,
                                      segment_models_id = NULL,
                                      parallelism = 1)
@@ -329,8 +324,6 @@ h2o.glrm <- function(training_frame,
     parms$recover_svd <- recover_svd
   if (!missing(max_runtime_secs))
     parms$max_runtime_secs <- max_runtime_secs
-  if (!missing(export_checkpoints_dir))
-    parms$export_checkpoints_dir <- export_checkpoints_dir
 
   # Check if user_y is an acceptable set of user-specified starting points
   if( is.data.frame(user_y) || is.matrix(user_y) || is.list(user_y) || is.H2OFrame(user_y) ) {

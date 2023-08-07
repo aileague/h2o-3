@@ -95,7 +95,8 @@ public class GLMV3 extends ModelBuilderSchema<GLM,GLMV3,GLMV3.GLMParametersV3> {
             "generate_variable_inflation_factors",
             "fix_tweedie_variance_power",
             "dispersion_learning_rate",
-            "influence"
+            "influence",
+            "linear_constraints"
     };
 
     @API(help = "Seed for pseudo random number generator (if applicable)", gridable = true)
@@ -154,6 +155,9 @@ public class GLMV3 extends ModelBuilderSchema<GLM,GLMV3,GLMV3.GLMParametersV3> {
 
     @API(help = "Standardize numeric columns to have zero mean and unit variance", level = Level.critical, gridable = true)
     public boolean standardize;
+
+    @API(help = "Internal parameter, do not use.  Have no effect on model.", level = Level.critical, gridable = false)
+    public boolean expose_constraints;
 
     @API(help = "Only applicable to multiple alpha/lambda values.  If false, build the next model for next set of " +
             "alpha/lambda values starting from the values provided by current model.  If true will start GLM model " +

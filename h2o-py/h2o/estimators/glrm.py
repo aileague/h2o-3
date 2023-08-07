@@ -58,7 +58,6 @@ class H2OGeneralizedLowRankEstimator(H2OEstimator):
                  impute_original=False,  # type: bool
                  recover_svd=False,  # type: bool
                  max_runtime_secs=0.0,  # type: float
-                 export_checkpoints_dir=None,  # type: Optional[str]
                  ):
         """
         :param model_id: Destination id for this model; auto-generated if not specified.
@@ -159,9 +158,6 @@ class H2OGeneralizedLowRankEstimator(H2OEstimator):
         :param max_runtime_secs: Maximum allowed runtime in seconds for model training. Use 0 to disable.
                Defaults to ``0.0``.
         :type max_runtime_secs: float
-        :param export_checkpoints_dir: Automatically export generated models to this directory.
-               Defaults to ``None``.
-        :type export_checkpoints_dir: str, optional
         """
         super(H2OGeneralizedLowRankEstimator, self).__init__()
         self._parms = {}
@@ -197,7 +193,6 @@ class H2OGeneralizedLowRankEstimator(H2OEstimator):
         self.impute_original = impute_original
         self.recover_svd = recover_svd
         self.max_runtime_secs = max_runtime_secs
-        self.export_checkpoints_dir = export_checkpoints_dir
 
     @property
     def training_frame(self):
@@ -1027,32 +1022,6 @@ class H2OGeneralizedLowRankEstimator(H2OEstimator):
     def max_runtime_secs(self, max_runtime_secs):
         assert_is_type(max_runtime_secs, None, numeric)
         self._parms["max_runtime_secs"] = max_runtime_secs
-
-    @property
-    def export_checkpoints_dir(self):
-        """
-        Automatically export generated models to this directory.
-
-        Type: ``str``.
-
-        :examples:
-
-        >>> import tempfile
-        >>> from os import listdir
-        >>> iris = h2o.import_file("http://h2o-public-test-data.s3.amazonaws.com/smalldata/iris/iris_wheader.csv")
-        >>> checkpoints_dir = tempfile.mkdtemp()
-        >>> iris_glrm = H2OGeneralizedLowRankEstimator(k=3,
-        ...                                            export_checkpoints_dir=checkpoints_dir,
-        ...                                            seed=1234)
-        >>> iris_glrm.train(x=iris.names, training_frame=iris)
-        >>> len(listdir(checkpoints_dir))
-        """
-        return self._parms.get("export_checkpoints_dir")
-
-    @export_checkpoints_dir.setter
-    def export_checkpoints_dir(self, export_checkpoints_dir):
-        assert_is_type(export_checkpoints_dir, None, str)
-        self._parms["export_checkpoints_dir"] = export_checkpoints_dir
 
 
     def transform_frame(self, fr):

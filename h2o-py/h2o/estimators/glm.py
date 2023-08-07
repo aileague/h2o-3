@@ -90,7 +90,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
                  cold_start=False,  # type: bool
                  lambda_min_ratio=-1.0,  # type: float
                  beta_constraints=None,  # type: Optional[Union[None, str, H2OFrame]]
-                 linear_constraints=None,  # type: Optional[Union[None, str, H2OFrame]]
+                 expose_constraints=False,  # type: bool
                  max_active_predictors=-1,  # type: int
                  interactions=None,  # type: Optional[List[str]]
                  interaction_pairs=None,  # type: Optional[List[tuple]]
@@ -115,6 +115,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
                  fix_tweedie_variance_power=True,  # type: bool
                  dispersion_learning_rate=0.5,  # type: float
                  influence=None,  # type: Optional[Literal["dfbetas"]]
+                 linear_constraints=None,  # type: Optional[Union[None, str, H2OFrame]]
                  ):
         """
         :param model_id: Destination id for this model; auto-generated if not specified.
@@ -315,12 +316,9 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
         :param beta_constraints: Beta constraints
                Defaults to ``None``.
         :type beta_constraints: Union[None, str, H2OFrame], optional
-        :param linear_constraints: Linear constraints: used to specify linear constraints involving more than one
-               coefficients in standard form.  It is only supported for solver IRLSM.  It contains four columns: names
-               (for coefficient names or constant), values, types ('Equal' or 'LessThanEqual'), constraint_numbers (0
-               for first linear constraint, 2 for second linear constraint, ...
-               Defaults to ``None``.
-        :type linear_constraints: Union[None, str, H2OFrame], optional
+        :param expose_constraints: Internal parameter, do not use.  Have no effect on model.
+               Defaults to ``False``.
+        :type expose_constraints: bool
         :param max_active_predictors: Maximum number of active predictors during computation. Use as a stopping
                criterion to prevent expensive model building with many predictors. Default indicates: If the IRLSM
                solver is used, the value of max_active_predictors is set to 5000 otherwise it is set to 100000000.
@@ -418,6 +416,12 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
                excluded in the dataset.
                Defaults to ``None``.
         :type influence: Literal["dfbetas"], optional
+        :param linear_constraints: Linear constraints: used to specify linear constraints involving more than one
+               coefficients in standard form.  It is only supported for solver IRLSM.  It contains four columns: names
+               (strings for coefficient names or constant), values, types ( strings of 'Equal' or 'LessThanEqual'),
+               constraint_numbers (0 for first linear constraint, 2 for second linear constraint, ...
+               Defaults to ``None``.
+        :type linear_constraints: Union[None, str, H2OFrame], optional
         """
         super(H2OGeneralizedLinearEstimator, self).__init__()
         self._parms = {}
@@ -474,7 +478,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
         self.cold_start = cold_start
         self.lambda_min_ratio = lambda_min_ratio
         self.beta_constraints = beta_constraints
-        self.linear_constraints = linear_constraints
+        self.expose_constraints = expose_constraints
         self.max_active_predictors = max_active_predictors
         self.interactions = interactions
         self.interaction_pairs = interaction_pairs
@@ -499,6 +503,7 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
         self.fix_tweedie_variance_power = fix_tweedie_variance_power
         self.dispersion_learning_rate = dispersion_learning_rate
         self.influence = influence
+        self.linear_constraints = linear_constraints
 
     @property
     def training_frame(self):
@@ -1896,20 +1901,18 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
             self._parms["beta_constraints"] = constraints[["names", "lower_bounds", "upper_bounds"]]
 
     @property
-    def linear_constraints(self):
+    def expose_constraints(self):
         """
-        Linear constraints: used to specify linear constraints involving more than one coefficients in standard form.
-        It is only supported for solver IRLSM.  It contains four columns: names (for coefficient names or constant),
-        values, types ('Equal' or 'LessThanEqual'), constraint_numbers (0 for first linear constraint, 2 for second
-        linear constraint, ...
+        Internal parameter, do not use.  Have no effect on model.
 
-        Type: ``Union[None, str, H2OFrame]``.
+        Type: ``bool``, defaults to ``False``.
         """
-        return self._parms.get("linear_constraints")
+        return self._parms.get("expose_constraints")
 
-    @linear_constraints.setter
-    def linear_constraints(self, linear_constraints):
-        self._parms["linear_constraints"] = H2OFrame._validate(linear_constraints, 'linear_constraints')
+    @expose_constraints.setter
+    def expose_constraints(self, expose_constraints):
+        assert_is_type(expose_constraints, None, bool)
+        self._parms["expose_constraints"] = expose_constraints
 
     @property
     def max_active_predictors(self):
@@ -2402,6 +2405,22 @@ class H2OGeneralizedLinearEstimator(H2OEstimator):
     def influence(self, influence):
         assert_is_type(influence, None, Enum("dfbetas"))
         self._parms["influence"] = influence
+
+    @property
+    def linear_constraints(self):
+        """
+        Linear constraints: used to specify linear constraints involving more than one coefficients in standard form.
+        It is only supported for solver IRLSM.  It contains four columns: names (strings for coefficient names or
+        constant), values, types ( strings of 'Equal' or 'LessThanEqual'), constraint_numbers (0 for first linear
+        constraint, 2 for second linear constraint, ...
+
+        Type: ``Union[None, str, H2OFrame]``.
+        """
+        return self._parms.get("linear_constraints")
+
+    @linear_constraints.setter
+    def linear_constraints(self, linear_constraints):
+        self._parms["linear_constraints"] = H2OFrame._validate(linear_constraints, 'linear_constraints')
 
     Lambda = deprecated_property('Lambda', lambda_)
 
