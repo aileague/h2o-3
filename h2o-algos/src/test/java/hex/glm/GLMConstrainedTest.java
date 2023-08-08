@@ -1,14 +1,17 @@
 package hex.glm;
 
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import water.DKV;
 import water.Scope;
 import water.TestUtil;
 import water.fvec.Frame;
 import water.fvec.TestFrameBuilder;
+import water.runner.CloudSize;
+import water.runner.H2ORunner;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -19,15 +22,90 @@ import static hex.glm.GLMModel.GLMParameters.Solver.IRLSM;
 import static water.fvec.Vec.T_NUM;
 import static water.fvec.Vec.T_STR;
 
+@RunWith(H2ORunner.class)
+@CloudSize(1)
 public class GLMConstrainedTest extends TestUtil {
-  
   public static final double EPS = 1e-6;
-
-  @BeforeClass
-  public static void setup() throws IOException {
-    stall_till_cloudsize(1);
+  Frame _betaConstraint1;
+  Frame _linearConstraint1;
+  Frame _linearConstraint2;
+  List<String> _coeffNames1;
+  
+  @Before
+  public void createConstraintFrames() {
+    Scope.enter();
+    Frame train = parseAndTrackTestFile("smalldata/glm_test/gaussian_20cols_10000Rows.csv");
+    int[] catCol = new int[]{0,1,2,3,4,5,6,7,8,9};
+    for (int colInd : catCol)
+      train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
+    DKV.put(train);
+    GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
+    params._standardize=true;
+    params._response_column = "C21";
+    params._max_iterations = 0;
+    params._train = train._key;
+    GLMModel glm = new GLM(params).trainModel().get();
+    _coeffNames1 = Stream.of(glm._output._coefficient_names).collect(Collectors.toList()); ;
+    int coefLen = _coeffNames1.size()-1;
+    // there are 5 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
+    // 0 <= betacoefLen-1 <= 2.0, 0.1 == betacoefLen-2 == 0.1.  This will be translated into the following standard
+    // form: 1.0-beta0 <= 0; beta0-10.0 <= 0, -1.0 -beta1 <= 0, betacoefLen-8.0 <= 0, 0-betacoefLen-1 <= 0,
+    // betacoefLen-1-2.0 <= 0, betacoefLen-2-0.1 == 0.
+    _betaConstraint1 =
+            new TestFrameBuilder()
+                    .withColNames("names", "lower_bounds", "upper_bounds")
+                    .withVecTypes(T_STR, T_NUM, T_NUM)
+                    .withDataForCol(0, new String[] {_coeffNames1.get(0), _coeffNames1.get(1),
+                            _coeffNames1.get(coefLen-3), _coeffNames1.get(coefLen-2), _coeffNames1.get(coefLen-1)})
+                    .withDataForCol(1, new double [] {1.0, -1.0, Double.NEGATIVE_INFINITY, 0.0, 0.1})
+                    .withDataForCol(2, new double[] {10.0, Double.POSITIVE_INFINITY, 8.0, 2.0, 0.1}).build();
+    Scope.track(_betaConstraint1);
+    // there are two constraints in the linear_constraints, the first one is 2*beta_0+0.5*beta_5 -1<= 0, the second 
+    // one is 0.5*beta_36-1.5*beta_38 == 0
+    _linearConstraint1 = new TestFrameBuilder()
+            .withColNames("names", "values", "types", "constraint_numbers")
+            .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
+            .withDataForCol(0, new String[] {_coeffNames1.get(0), _coeffNames1.get(5), "constant",
+                    _coeffNames1.get(36), _coeffNames1.get(38)})
+            .withDataForCol(1, new double [] {2, 0.5, -1, 0.5, -1.5})
+            .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal"})
+            .withDataForCol(3, new int[]{0,0,0,1,1}).build();
+    Scope.track(_linearConstraint1);
+    // Constraints in the linear_constraints, 
+    // a. -0.3*beta_0+0.5*beta_1+1*beta_3-3 <= 0; 
+    // b. 3*beta_8-4*beta_36+0.5*beta_37 <= 0, 
+    // c.0.1*beta_38-0.2*beta_39==0, 
+    // d. 2*beta_40-0.1*beta_41-0.4*beta_42+0.8 <= 0;
+    // e. 0.1*beta_4-0.5*beta_5+0.7*beta_6-1.1 == 0; 
+    // f. 2*beta_6+0.5*beta_43-0.3*beta_7 == 0 
+    // g. 0.5*beta_36-1.5*beta_38-0.3 == 0    
+    _linearConstraint2 = new TestFrameBuilder()
+            .withColNames("names", "values", "types", "constraint_numbers")
+            .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
+            .withDataForCol(0, new String[] {_coeffNames1.get(0), _coeffNames1.get(1), _coeffNames1.get(3),
+                    "constant", _coeffNames1.get(8), _coeffNames1.get(36), _coeffNames1.get(37), _coeffNames1.get(38),
+                    _coeffNames1.get(39), _coeffNames1.get(40), _coeffNames1.get(41), _coeffNames1.get(42), "constant",
+                    _coeffNames1.get(4), _coeffNames1.get(5), _coeffNames1.get(6), "constant", _coeffNames1.get(6),
+                    _coeffNames1.get(43), _coeffNames1.get(7), _coeffNames1.get(36), _coeffNames1.get(38), "constant"})
+            .withDataForCol(1, new double [] {-0.3, 0.5, 1.0, -3.0, 3, -4, 0.5, 0.1, -0.2, 2.0, -0.1, -0.4,
+                    0.8, 0.1, -0.5, 0.7, -1.1, 2.0, 0.5, -0.3, 0.5, -1.5, -0.3})
+            .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "lessthanequal",
+                    "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "lessthanequal",
+                    "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "equal", "equal", "equal",
+                    "equal", "equal", "equal", "equal", "equal"})
+            .withDataForCol(3, new int[]{0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6,
+                    6}).build();
+    Scope.track(_linearConstraint2);
+    Scope.untrack(train);
+    glm.delete();
   }
-
+  
+  @After
+  public void teardown() {
+    Scope.exit();
+  }
+  
+  
   // make sure we can get coefficient names without building a GLM model.  We compare the coefficient names
   // obtained without building a model and with building a model.  They should be the same.
   @Test
@@ -77,34 +155,11 @@ public class GLMConstrainedTest extends TestUtil {
       params._max_iterations = 0;
       params._solver = IRLSM;
       params._train = train._key;
-      GLMModel glm = new GLM(params).trainModel().get();
-      Scope.track_generic(glm);
-      List<String> coeffNames = Stream.of(glm._output._coefficient_names).collect(Collectors.toList()); ;
+      List<String> coeffNames = _coeffNames1;
       // build the beta_constraints
       int coefLen = coeffNames.size()-1;
-      // there are 5 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
-      // 0 <= betacoefLen-1 <= 2.0, 0.1 == betacoefLen-2 == 0.1.  This will be translated into the following standard
-      // form: 1.0-beta0 <= 0; beta0-10.0 <= 0, -1.0 -beta1 <= 0, betacoefLen-8.0 <= 0, 0-betacoefLen-1 <= 0,
-      // betacoefLen-1-2.0 <= 0, betacoefLen-2-0.1 == 0. 
-      Frame beta_constraints =
-              new TestFrameBuilder()
-                      .withColNames("names", "lower_bounds", "upper_bounds")
-                      .withVecTypes(T_STR, T_NUM, T_NUM)
-                      .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(1),
-                              coeffNames.get(coefLen-3), coeffNames.get(coefLen-2), coeffNames.get(coefLen-1)})
-                      .withDataForCol(1, new double [] {1.0, -1.0, Double.NEGATIVE_INFINITY, 0.0, 0.1})
-                      .withDataForCol(2, new double[] {10.0, Double.POSITIVE_INFINITY, 8.0, 2.0, 0.1}).build();
-      Scope.track(beta_constraints);
-      // there are two constraints in the linear_constraints, the first one is 2*beta_0+0.5*beta_5 -1<= 0, the second 
-      // one is 0.5*beta_36-1.5*beta_38 == 0
-      Frame linear_constraints = new TestFrameBuilder()
-              .withColNames("names", "values", "types", "constraint_numbers")
-              .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
-              .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(5), "constant",
-                      coeffNames.get(36), coeffNames.get(38)})
-              .withDataForCol(1, new double [] {2, 0.5, -1, 0.5, -1.5})
-              .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal"})
-              .withDataForCol(3, new int[]{0,0,0,1,1}).build();
+      Frame beta_constraints = _betaConstraint1;
+      Frame linear_constraints = _linearConstraint1;
       params._max_iterations = 1;
       params._expose_constraints = true;
       params._beta_constraints = beta_constraints._key;
@@ -151,40 +206,19 @@ public class GLMConstrainedTest extends TestUtil {
       for (int colInd : catCol)
         train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
       DKV.put(train);
+      List<String> coeffNames = _coeffNames1;
+      // build the beta_constraints
+      int coefLen = coeffNames.size()-1;
+      Frame beta_constraints = _betaConstraint1;
+      // there are two constraints in the linear_constraints, the first one is 2*beta_0+0.5*beta_5 -1<= 0, the second 
+      // one is 0.5*beta_36-1.5*beta_38 == 0
+      Frame linear_constraints = _linearConstraint1;
       GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
       params._standardize=false;
       params._response_column = "C21";
       params._max_iterations = 0;
       params._solver = IRLSM;
       params._train = train._key;
-      GLMModel glm = new GLM(params).trainModel().get();
-      Scope.track_generic(glm);
-      List<String> coeffNames = Stream.of(glm._output._coefficient_names).collect(Collectors.toList()); ;
-      // build the beta_constraints
-      int coefLen = coeffNames.size()-1;
-      // there are 5 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
-      // 0 <= betacoefLen-1 <= 2.0, 0.1 == betacoefLen-2 == 0.1.  This will be translated into the following standard
-      // form: 1.0-beta0 <= 0; beta0-10.0 <= 0, -1.0 -beta1 <= 0, betacoefLen-8.0 <= 0, 0-betacoefLen-1 <= 0,
-      // betacoefLen-1-2.0 <= 0, betacoefLen-2-0.1 == 0.
-      Frame beta_constraints = 
-              new TestFrameBuilder()
-                      .withColNames("names", "lower_bounds", "upper_bounds")
-                      .withVecTypes(T_STR, T_NUM, T_NUM)
-                      .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(1), 
-                              coeffNames.get(coefLen-3), coeffNames.get(coefLen-2), coeffNames.get(coefLen-1)})  
-                      .withDataForCol(1, new double [] {1.0, -1.0, Double.NEGATIVE_INFINITY, 0.0, 0.1})
-                      .withDataForCol(2, new double[] {10.0, Double.POSITIVE_INFINITY, 8.0, 2.0, 0.1}).build();
-      Scope.track(beta_constraints);
-      // there are two constraints in the linear_constraints, the first one is 2*beta_0+0.5*beta_5 -1<= 0, the second 
-      // one is 0.5*beta_36-1.5*beta_38 == 0
-      Frame linear_constraints = new TestFrameBuilder()
-              .withColNames("names", "values", "types", "constraint_numbers")
-              .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
-              .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(5), "constant",
-                      coeffNames.get(36), coeffNames.get(38)})
-              .withDataForCol(1, new double [] {2, 0.5, -1, 0.5, -1.5})
-              .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal"})
-              .withDataForCol(3, new int[]{0,0,0,1,1}).build();
       params._max_iterations = 1;
       params._expose_constraints = true;
       params._beta_constraints = beta_constraints._key;
@@ -226,41 +260,15 @@ public class GLMConstrainedTest extends TestUtil {
       for (int colInd : catCol)
         train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
       DKV.put(train);
+      List<String> coeffNames = _coeffNames1;
+      Frame linear_constraints = _linearConstraint2;
+      
       GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
       params._standardize=false;
       params._response_column = "C21";
       params._max_iterations = 0;
       params._solver = IRLSM;
       params._train = train._key;
-      GLMModel glm = new GLM(params).trainModel().get();
-      Scope.track_generic(glm);
-      List<String> coeffNames = Stream.of(glm._output._coefficient_names).collect(Collectors.toList()); ;
-      // build the beta_constraints
-      int coefLen = coeffNames.size()-1;
-     // Constraints in the linear_constraints, 
-      // a. -0.3*beta_0+0.5*beta_1+1*beta_3-3 <= 0; 
-      // b. 3*beta_8-4*beta_36+0.5*beta_37 <= 0, 
-      // c.0.1*beta_38-0.2*beta_39==0, 
-      // d. 2*beta_40-0.1*beta_41-0.4*beta_42+0.8 <= 0;
-      // e. 0.1*beta_4-0.5*beta_5+0.7*beta_6-1.1 == 0; 
-      // f. 2*beta_6+0.5*beta_43-0.3*beta_7 == 0 
-      // g. 0.5*beta_36-1.5*beta_38-0.3 == 0
-      Frame linear_constraints = new TestFrameBuilder()
-              .withColNames("names", "values", "types", "constraint_numbers")
-              .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
-              .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(1), coeffNames.get(3), 
-                      "constant", coeffNames.get(8), coeffNames.get(36), coeffNames.get(37), coeffNames.get(38),
-                      coeffNames.get(39), coeffNames.get(40), coeffNames.get(41), coeffNames.get(42), "constant", 
-                      coeffNames.get(4), coeffNames.get(5), coeffNames.get(6), "constant", coeffNames.get(6), 
-                      coeffNames.get(43), coeffNames.get(7), coeffNames.get(36), coeffNames.get(38), "constant"})
-              .withDataForCol(1, new double [] {-0.3, 0.5, 1.0, -3.0, 3, -4, 0.5, 0.1, -0.2, 2.0, -0.1, -0.4, 
-                      0.8, 0.1, -0.5, 0.7, -1.1, 2.0, 0.5, -0.3, 0.5, -1.5, -0.3})
-              .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "lessthanequal",
-                      "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "lessthanequal", 
-                      "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "equal", "equal", "equal",
-                      "equal", "equal", "equal", "equal", "equal"})
-              .withDataForCol(3, new int[]{0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6, 
-                      6}).build();
       params._max_iterations = 1;
       params._expose_constraints = true;
       params._linear_constraints = linear_constraints._key;
@@ -307,30 +315,8 @@ public class GLMConstrainedTest extends TestUtil {
       List<String> coeffNames = Stream.of(glm._output._coefficient_names).collect(Collectors.toList()); ;
       // build the beta_constraints
       int coefLen = coeffNames.size()-1;
-      // Constraints in the linear_constraints, 
-      // a. -0.3*beta_0+0.5*beta_1+1*beta_3-3 <= 0; 
-      // b. 3*beta_8-4*beta_36+0.5*beta_37 <= 0, 
-      // c.0.1*beta_38-0.2*beta_39==0, 
-      // d. 2*beta_40-0.1*beta_41-0.4*beta_42+0.8 <= 0;
-      // e. 0.1*beta_4-0.5*beta_5+0.7*beta_6-1.1 == 0; 
-      // f. 2*beta_6+0.5*beta_43-0.3*beta_7 == 0 
-      // g. 0.5*beta_36-1.5*beta_38-0.3 == 0
-      Frame linear_constraints = new TestFrameBuilder()
-              .withColNames("names", "values", "types", "constraint_numbers")
-              .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
-              .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(1), coeffNames.get(3),
-                      "constant", coeffNames.get(8), coeffNames.get(36), coeffNames.get(37), coeffNames.get(38),
-                      coeffNames.get(39), coeffNames.get(40), coeffNames.get(41), coeffNames.get(42), "constant",
-                      coeffNames.get(4), coeffNames.get(5), coeffNames.get(6), "constant", coeffNames.get(6),
-                      coeffNames.get(43), coeffNames.get(7), coeffNames.get(36), coeffNames.get(38), "constant"})
-              .withDataForCol(1, new double [] {-0.3, 0.5, 1.0, -3.0, 3, -4, 0.5, 0.1, -0.2, 2.0, -0.1, -0.4,
-                      0.8, 0.1, -0.5, 0.7, -1.1, 2.0, 0.5, -0.3, 0.5, -1.5, -0.3})
-              .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "lessthanequal",
-                      "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "lessthanequal",
-                      "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "equal", "equal", "equal",
-                      "equal", "equal", "equal", "equal", "equal"})
-              .withDataForCol(3, new int[]{0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6,
-                      6}).build();
+
+      Frame linear_constraints = _linearConstraint2;
       params._max_iterations = 1;
       params._expose_constraints = true;
       params._linear_constraints = linear_constraints._key;
@@ -361,6 +347,63 @@ public class GLMConstrainedTest extends TestUtil {
     }
   }
 
+  // Test to make sure the matrix formed from constraints are correct
+  @Test
+  public void testConstraintsMatrix() {
+    Scope.enter();
+    try {
+      Frame train = parseAndTrackTestFile("smalldata/glm_test/gaussian_20cols_10000Rows.csv");
+      int[] catCol = new int[]{0,1,2,3,4,5,6,7,8,9};
+      for (int colInd : catCol)
+        train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
+      DKV.put(train);
+      GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
+      params._standardize = false;
+      params._response_column = "C21";
+      params._max_iterations = 0;
+      params._solver = IRLSM;
+      params._train = train._key;
+      GLMModel glm = new GLM(params).trainModel().get();
+      Scope.track_generic(glm);
+      List<String> coeffNames = Stream.of(glm._output._coefficient_names).collect(Collectors.toList()); ;
+      // build the beta_constraints
+      int coefLen = coeffNames.size()-1;
+      // there are 5 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
+      // 0 <= betacoefLen-1 <= 2.0, 0.1 == betacoefLen-2 == 0.1.  This will be translated into the following standard
+      // form: 1.0-beta0 <= 0; beta0-10.0 <= 0, -1.0 -beta1 <= 0, betacoefLen-8.0 <= 0, 0-betacoefLen-1 <= 0,
+      // betacoefLen-1-2.0 <= 0, betacoefLen-2-0.1 == 0. 
+      Frame beta_constraints =
+              new TestFrameBuilder()
+                      .withColNames("names", "lower_bounds", "upper_bounds")
+                      .withVecTypes(T_STR, T_NUM, T_NUM)
+                      .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(1),
+                              coeffNames.get(coefLen-3), coeffNames.get(coefLen-2), coeffNames.get(coefLen-1)})
+                      .withDataForCol(1, new double [] {1.0, -1.0, Double.NEGATIVE_INFINITY, 0.0, 0.1})
+                      .withDataForCol(2, new double[] {10.0, Double.POSITIVE_INFINITY, 8.0, 2.0, 0.1}).build();
+      Scope.track(beta_constraints);
+      // there are two constraints in the linear_constraints, the first one is 2*beta_0+0.5*beta_5 -1<= 0, the second 
+      // one is 0.5*beta_36-1.5*beta_38 == 0
+      Frame linear_constraints = new TestFrameBuilder()
+              .withColNames("names", "values", "types", "constraint_numbers")
+              .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
+              .withDataForCol(0, new String[] {coeffNames.get(0), coeffNames.get(5), "constant",
+                      coeffNames.get(36), coeffNames.get(38)})
+              .withDataForCol(1, new double [] {2, 0.5, -1, 0.5, -1.5})
+              .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal"})
+              .withDataForCol(3, new int[]{0,0,0,1,1}).build();
+      params._max_iterations = 1;
+      params._expose_constraints = true;
+      params._beta_constraints = beta_constraints._key;
+      params._linear_constraints = linear_constraints._key;
+      GLMModel glm2 = new GLM(params).trainModel().get();
+      Scope.track_generic(glm2);
+      
+
+    } finally {
+      Scope.exit();
+    }
+  }
+
   public void assertCorrectConstraintContent(String[][] coefNames, double[][] value,
                                              ConstrainedGLMUtils.LinearConstraints[] consts) {
     assert coefNames.length == consts.length;
@@ -377,5 +420,4 @@ public class GLMConstrainedTest extends TestUtil {
       }
     }
   }
-  
 }

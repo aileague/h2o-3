@@ -8,8 +8,7 @@ import water.Scope;
 import water.fvec.Frame;
 import water.util.IcedHashMap;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -20,7 +19,7 @@ public class ConstrainedGLMUtils {
     double _constraintsVal; // contains evaluated constraint values
     
     public LinearConstraints() {
-      _constraints = new IcedHashMap<String, Double>();
+      _constraints = new IcedHashMap<>();
       _constraintsVal = Double.NaN; // represent constraint not evaluated.
     }
   }
@@ -44,25 +43,19 @@ public class ConstrainedGLMUtils {
   public static void extractBetaConstraints(ComputationState state, String[] coefNames) {
     GLM.BetaConstraint betaC = state.activeBC();
     List<LinearConstraints> betaConstraints = new ArrayList<>();
-    int constraintsNo = 0;  // count number of equality and lessthanequalto constraints
     if (betaC._betaLB != null) {
       int numCons = betaC._betaLB.length-1;
       for (int index=0; index<numCons; index++) {
         if (!Double.isInfinite(betaC._betaUB[index]) && (betaC._betaLB[index] == betaC._betaUB[index])) { // equality constraint
-          addBCEqualityConstraint(betaConstraints, betaC, coefNames, index, constraintsNo);
-          constraintsNo++;
+          addBCEqualityConstraint(betaConstraints, betaC, coefNames, index);
         } else if (!Double.isInfinite(betaC._betaUB[index]) && !Double.isInfinite(betaC._betaLB[index]) && 
                 (betaC._betaLB[index] < betaC._betaUB[index])) { // low < beta < high, generate two lessThanEqualTo constraints
-          addBCGreaterThanConstraint(betaConstraints, betaC, coefNames, index, constraintsNo);
-          constraintsNo++;
-          addBCLessThanConstraint(betaConstraints, betaC, coefNames, index, constraintsNo);
-          constraintsNo++;
+          addBCGreaterThanConstraint(betaConstraints, betaC, coefNames, index);
+          addBCLessThanConstraint(betaConstraints, betaC, coefNames, index);
         } else if (Double.isInfinite(betaC._betaUB[index]) && !Double.isInfinite(betaC._betaLB[index])) {  // low < beta < positive infinity
-          addBCGreaterThanConstraint(betaConstraints, betaC, coefNames, index, constraintsNo);
-          constraintsNo++;
+          addBCGreaterThanConstraint(betaConstraints, betaC, coefNames, index);
         } else if (!Double.isInfinite(betaC._betaUB[index]) && Double.isInfinite(betaC._betaLB[index])) { // negative infinity < beta < high
-          addBCLessThanConstraint(betaConstraints, betaC, coefNames, index, constraintsNo);
-          constraintsNo++;          
+          addBCLessThanConstraint(betaConstraints, betaC, coefNames, index);
         }
       }
     }
@@ -74,7 +67,7 @@ public class ConstrainedGLMUtils {
    * transformation: val <= beta <= val: transformed to beta-val == 0, add to equalTo constraint.
    */
   public static void addBCEqualityConstraint(List<LinearConstraints> equalityC, GLM.BetaConstraint betaC,
-                                           String[] coefNames, int index, int constraintIndex) {
+                                           String[] coefNames, int index) {
     LinearConstraints oneEqualityConstraint = new LinearConstraints();
     oneEqualityConstraint._constraints.put(coefNames[index], 1.0);
     oneEqualityConstraint._constraints.put("constant", -betaC._betaLB[index]);
@@ -86,7 +79,7 @@ public class ConstrainedGLMUtils {
    * transformation: low_val <= beta <= Infinity: transformed to low_val - beta <= 0.
    */
   public static void addBCGreaterThanConstraint(List<LinearConstraints> lessThanC, GLM.BetaConstraint betaC,
-                                             String[] coefNames, int index, int constraintIndex) {
+                                             String[] coefNames, int index) {
     LinearConstraints lessThanEqualToConstraint = new LinearConstraints();
     lessThanEqualToConstraint._constraints.put(coefNames[index], -1.0);
     lessThanEqualToConstraint._constraints.put("constant", betaC._betaLB[index]);
@@ -98,7 +91,7 @@ public class ConstrainedGLMUtils {
    * transformation: -Infinity <= beta <= high_val: transformed to beta - high_val <= 0.
    */
   public static void addBCLessThanConstraint(List<LinearConstraints> lessThanC, GLM.BetaConstraint betaC,
-                                             String[] coefNames, int index, int constraintIndex) {
+                                             String[] coefNames, int index) {
     LinearConstraints greaterThanConstraint = new LinearConstraints();
     greaterThanConstraint._constraints.put(coefNames[index], 1.0);
     greaterThanConstraint._constraints.put("constant", -betaC._betaUB[index]);
@@ -184,5 +177,63 @@ public class ConstrainedGLMUtils {
               " just one coefficient: "+ constraintF.vec("names").stringAt(0)+", use betaConstraints instead.");
     equalC.add(currentConstraint);
     rowIndices.removeAll(processedRowIndices);
+  }
+  
+  public static double[][] checkRedundantConstraints(ComputationState state, List<String> constraintNamesList) {
+    // extract coefficients from constraints
+    extractConstraintCoeffs(state, constraintNamesList);
+    // form double matrix
+    int constraintNameLen = constraintNamesList.size();
+    double[][] initConstraintMatrix = new double[constraintNameLen][constraintNameLen];
+    fillConstraintValues(state, constraintNamesList, initConstraintMatrix);
+    return initConstraintMatrix;
+  }
+  
+  public static void fillConstraintValues(ComputationState state, List<String> constraintNamesList, double[][] initCMatrix) {
+    int rowIndex = 0;
+    if (state._fromBetaConstraints != null)
+      rowIndex = extractConstraintValues(state._fromBetaConstraints, constraintNamesList, initCMatrix, rowIndex);
+    if (state._equalityConstraints != null)
+      rowIndex = extractConstraintValues(state._equalityConstraints, constraintNamesList, initCMatrix, rowIndex);
+    if (state._lessThanEqualToConstraints != null)
+      extractConstraintValues(state._lessThanEqualToConstraints, constraintNamesList, initCMatrix, rowIndex);
+  }
+  
+  public static int extractConstraintValues(LinearConstraints[] constraints, List<String> constraintNamesList, double[][] initCMatrix, int rowIndex) {
+    int numConstr = constraints.length;
+    for (int index=0; index<numConstr; index++) {
+      Set<String> coeffKeys = constraints[index]._constraints.keySet();
+      for (String oneKey : coeffKeys) {
+        if (!"constant".equals(oneKey) && constraintNamesList.contains(oneKey)) {
+          initCMatrix[rowIndex][constraintNamesList.indexOf(oneKey)] = constraints[index]._constraints.get(oneKey);
+        }
+      }
+      rowIndex++;
+    }
+    return rowIndex;
+  }
+  
+  public static List<String> extractConstraintCoeffs(ComputationState state, List<String> constraintCoeffName) {
+    if (state._fromBetaConstraints != null)   // extract coefficients constraints
+      extractCoeffNames(constraintCoeffName, state._fromBetaConstraints);
+
+    if (state._equalityConstraints != null)
+      extractCoeffNames(constraintCoeffName, state._equalityConstraints);
+
+    if (state._lessThanEqualToConstraints != null)
+      extractCoeffNames(constraintCoeffName, state._lessThanEqualToConstraints);
+    
+    // remove duplicates in the constraints names
+    Set<String> noDuplicateNames = new HashSet<>(constraintCoeffName);
+    return new ArrayList<>(noDuplicateNames);
+  }
+  
+  public static List<String> extractCoeffNames(List<String> coeffList, LinearConstraints[] constraints) {
+    int numConst = constraints.length;
+    for (int index=0; index<numConst; index++) {
+      Set<String> keys = constraints[index]._constraints.keySet();
+      coeffList.addAll(keys);
+    }
+    return coeffList;
   }
 }

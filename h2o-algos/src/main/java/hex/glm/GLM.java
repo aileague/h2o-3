@@ -51,8 +51,7 @@ import static hex.gam.MatrixFrameUtils.GamUtils.copy2DArray;
 import static hex.gam.MatrixFrameUtils.GamUtils.keepFrameKeys;
 import static hex.glm.ComputationState.extractSubRange;
 import static hex.glm.ComputationState.fillSubRange;
-import static hex.glm.ConstrainedGLMUtils.extractBetaConstraints;
-import static hex.glm.ConstrainedGLMUtils.extractLinearConstraints;
+import static hex.glm.ConstrainedGLMUtils.*;
 import static hex.glm.DispersionUtils.*;
 import static hex.glm.GLMModel.GLMParameters;
 import static hex.glm.GLMModel.GLMParameters.CHECKPOINT_NON_MODIFIABLE_FIELDS;
@@ -561,6 +560,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
 
   DataInfo _dinfo;
   private transient DataInfo _validDinfo;
+  String[] _constraintCoefficientNames;
+  double[][] _initConstraintMatrix;
   // time per iteration in ms
 
   static class ScoringHistory {
@@ -1362,6 +1363,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       // extract constraints from linear_constraints into equality of lessthanequalto constraints
       extractLinearConstraints(_state, _parms._linear_constraints, _dinfo);
       // make sure constraints have full rank.  If not, generate messages stating what constraints are redundant, error out
+      List<String> constraintNames = new ArrayList<>();
+      checkRedundantConstraints(_state, constraintNames);
     }
   }
   
