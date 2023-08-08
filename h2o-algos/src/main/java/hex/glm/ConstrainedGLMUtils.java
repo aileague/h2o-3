@@ -1,5 +1,6 @@
 package hex.glm;
 
+import Jama.Matrix;
 import hex.DataInfo;
 import water.DKV;
 import water.Iced;
@@ -179,13 +180,14 @@ public class ConstrainedGLMUtils {
     rowIndices.removeAll(processedRowIndices);
   }
   
-  public static double[][] checkRedundantConstraints(ComputationState state, List<String> constraintNamesList) {
-    // extract coefficients from constraints
+  public static double[][] formConstraintMatrix(ComputationState state, List<String> constraintNamesList) {
+    // extract coefficient names from constraints
     extractConstraintCoeffs(state, constraintNamesList);
     // form double matrix
     int constraintNameLen = constraintNamesList.size();
     double[][] initConstraintMatrix = new double[constraintNameLen][constraintNameLen];
     fillConstraintValues(state, constraintNamesList, initConstraintMatrix);
+    
     return initConstraintMatrix;
   }
   
@@ -204,9 +206,8 @@ public class ConstrainedGLMUtils {
     for (int index=0; index<numConstr; index++) {
       Set<String> coeffKeys = constraints[index]._constraints.keySet();
       for (String oneKey : coeffKeys) {
-        if (!"constant".equals(oneKey) && constraintNamesList.contains(oneKey)) {
+        if ( constraintNamesList.contains(oneKey))
           initCMatrix[rowIndex][constraintNamesList.indexOf(oneKey)] = constraints[index]._constraints.get(oneKey);
-        }
       }
       rowIndex++;
     }
@@ -235,5 +236,10 @@ public class ConstrainedGLMUtils {
       coeffList.addAll(keys);
     }
     return coeffList;
+  }
+  
+  public static boolean foundRedundantConstraints(final double[][] initConstraintMatrix) {
+    Matrix constMatrix = new Matrix(initConstraintMatrix);
+    return false;
   }
 }

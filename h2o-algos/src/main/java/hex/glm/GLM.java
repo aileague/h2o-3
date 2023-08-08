@@ -1364,7 +1364,9 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       extractLinearConstraints(_state, _parms._linear_constraints, _dinfo);
       // make sure constraints have full rank.  If not, generate messages stating what constraints are redundant, error out
       List<String> constraintNames = new ArrayList<>();
-      checkRedundantConstraints(_state, constraintNames);
+      _initConstraintMatrix = formConstraintMatrix(_state, constraintNames);
+      if (foundRedundantConstraints(_initConstraintMatrix))
+        
     }
   }
   
