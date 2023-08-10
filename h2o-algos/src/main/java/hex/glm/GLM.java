@@ -1365,7 +1365,9 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       // make sure constraints have full rank.  If not, generate messages stating what constraints are redundant, error out
       List<String> constraintNames = new ArrayList<>();
       _initConstraintMatrix = formConstraintMatrix(_state, constraintNames);
+      _constraintCoefficientNames = constraintNames.toArray(new String[0]);
       if (foundRedundantConstraints(_initConstraintMatrix))
+        ;
         
     }
   }
@@ -3610,6 +3612,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         _model._output._fromBetaConstraints = _state._fromBetaConstraints;
         _model._output._equalityConstraints = _state._equalityConstraints;
         _model._output._lessThanEqualToConstraints = _state._lessThanEqualToConstraints;
+        _model._output._constraintCoefficientNames = _constraintCoefficientNames;
+        _model._output._initConstraintMatrix = _initConstraintMatrix;
       }
       if (_parms._max_iterations == 0) {
         return;

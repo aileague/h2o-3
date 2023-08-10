@@ -12,6 +12,7 @@ import water.fvec.TestFrameBuilder;
 import water.runner.CloudSize;
 import water.runner.H2ORunner;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -30,6 +31,12 @@ public class GLMConstrainedTest extends TestUtil {
   Frame _linearConstraint1;
   Frame _linearConstraint2;
   List<String> _coeffNames1;
+  String[][] _betaConstraintNames1;
+  double[][] _betaConstraintVal1;
+  String[][] _equalityNames1;
+  double[][] _equalityValues1;
+  String[][] _lessThanNames1;
+  double[][] _lessThanValues1;
   
   @Before
   public void createConstraintFrames() {
@@ -71,6 +78,23 @@ public class GLMConstrainedTest extends TestUtil {
             .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal"})
             .withDataForCol(3, new int[]{0,0,0,1,1}).build();
     Scope.track(_linearConstraint1);
+    // form correct constraints names and values:
+    _betaConstraintNames1 = new String[][]{{_coeffNames1.get(0), "constant"}, {_coeffNames1.get(0), "constant"},
+            {_coeffNames1.get(1), "constant"}, {_coeffNames1.get(coefLen-3), "constant"},
+            {_coeffNames1.get(coefLen-2), "constant"}, {_coeffNames1.get(coefLen-2), "constant"},
+            {_coeffNames1.get(coefLen-1), "constant"}};
+    _betaConstraintVal1 = new double[][]{{-1,1}, {1,-10}, {-1,-1},
+            {1.0,-8*train.vec(_coeffNames1.get(coefLen-3)).sigma()},
+            {-1,0*train.vec(_coeffNames1.get(coefLen-2)).sigma()},
+            {1,-2.0*train.vec(_coeffNames1.get(coefLen-2)).sigma()}, {1,-0.1*train.vec(_coeffNames1.get(coefLen-1)).sigma()}};
+
+    _equalityNames1 = new String[][]{{_coeffNames1.get(36), _coeffNames1.get(38), "constant"}};
+    _equalityValues1 = new double[][]{{0.5/train.vec(_coeffNames1.get(36)).sigma(),
+            -1.5/train.vec(_coeffNames1.get(38)).sigma(), 0.0}};
+
+    _lessThanNames1 = new String[][]{{_coeffNames1.get(0), _coeffNames1.get(5), "constant"}};
+    _lessThanValues1 = new double[][]{{2, 0.5, -1}};
+
     // Constraints in the linear_constraints, 
     // a. -0.3*beta_0+0.5*beta_1+1*beta_3-3 <= 0; 
     // b. 3*beta_8-4*beta_36+0.5*beta_37 <= 0, 
@@ -97,6 +121,7 @@ public class GLMConstrainedTest extends TestUtil {
                     6}).build();
     Scope.track(_linearConstraint2);
     Scope.untrack(train);
+
     glm.delete();
   }
   
@@ -105,6 +130,43 @@ public class GLMConstrainedTest extends TestUtil {
     Scope.exit();
   }
   
+  // make sure correct constraint matrix is formed after extracting constraints from beta constraints and linear
+  // constraints
+  @Test
+  public void testBetaLinearConstraintMatrix() {
+    Scope.enter();
+    try {
+      Frame train = parseAndTrackTestFile("smalldata/glm_test/gaussian_20cols_10000Rows.csv");
+      int[] catCol = new int[]{0,1,2,3,4,5,6,7,8,9};
+      for (int colInd : catCol)
+        train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
+      DKV.put(train);
+      GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
+      params._standardize = true;
+      params._response_column = "C21";
+      params._solver = IRLSM;
+      params._train = train._key;
+      // build the beta_constraints
+      Frame beta_constraints = _betaConstraint1;
+      Frame linear_constraints = _linearConstraint1;
+      params._max_iterations = 1;
+      params._expose_constraints = true;
+      params._beta_constraints = beta_constraints._key;
+      params._linear_constraints = linear_constraints._key;
+      GLMModel glm2 = new GLM(params).trainModel().get();
+      Scope.track_generic(glm2);
+      // check that constraint matrix is extracted correctly
+      List<String> constraintNames = Arrays.stream(glm2._output._constraintCoefficientNames).collect(Collectors.toList());
+      double[][] initConstraintMatrix = glm2._output._initConstraintMatrix;
+      
+    } finally {
+      Scope.exit();
+    }
+  }
+  
+  public void assertCorrectConstraintMatrix(List<String> constraintNames, double[][] constraintMatrix, ) {
+    
+  }
   
   // make sure we can get coefficient names without building a GLM model.  We compare the coefficient names
   // obtained without building a model and with building a model.  They should be the same.
@@ -152,7 +214,6 @@ public class GLMConstrainedTest extends TestUtil {
       GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
       params._standardize = true;
       params._response_column = "C21";
-      params._max_iterations = 0;
       params._solver = IRLSM;
       params._train = train._key;
       List<String> coeffNames = _coeffNames1;
@@ -167,28 +228,15 @@ public class GLMConstrainedTest extends TestUtil {
       GLMModel glm2 = new GLM(params).trainModel().get();
       Scope.track_generic(glm2);
       // check constraints from betaConstraints are extracted properly
-      String[][] betaConstraintNames = new String[][]{{coeffNames.get(0), "constant"}, {coeffNames.get(0), "constant"},
-              {coeffNames.get(1), "constant"}, {coeffNames.get(coefLen-3), "constant"},
-              {coeffNames.get(coefLen-2), "constant"}, {coeffNames.get(coefLen-2), "constant"},
-              {coeffNames.get(coefLen-1), "constant"}};
-      double[][] betaConstraintVal = new double[][]{{-1,1}, {1,-10}, {-1,-1}, 
-              {1.0,-8*train.vec(coeffNames.get(coefLen-3)).sigma()}, 
-              {-1,0*train.vec(coeffNames.get(coefLen-2)).sigma()}, 
-              {1,-2.0*train.vec(coeffNames.get(coefLen-2)).sigma()}, {1,-0.1*train.vec(coeffNames.get(coefLen-1)).sigma()}};
       ConstrainedGLMUtils.LinearConstraints[] fromBetaConstraint = glm2._output._fromBetaConstraints;
-      assert betaConstraintNames.length == fromBetaConstraint.length : "Expected constraint length: "+betaConstraintVal.length+" but" +
+      assert _betaConstraintNames1.length == fromBetaConstraint.length : "Expected constraint length: "+_betaConstraintVal1.length+" but" +
               " actual is "+fromBetaConstraint.length;
-      assertCorrectConstraintContent(betaConstraintNames, betaConstraintVal, fromBetaConstraint);
+      assertCorrectConstraintContent(_betaConstraintNames1, _betaConstraintVal1, fromBetaConstraint);
       // check constraints from linear constraints are extracted properly
       // check equality constraint
-      String[][] equalityNames = new String[][]{{coeffNames.get(36), coeffNames.get(38), "constant"}};
-      double[][] equalityValues = new double[][]{{0.5/train.vec(coeffNames.get(36)).sigma(), 
-              -1.5/train.vec(coeffNames.get(38)).sigma(), 0.0}};
-      assertCorrectConstraintContent(equalityNames, equalityValues, glm2._output._equalityConstraints);
+      assertCorrectConstraintContent(_equalityNames1, _equalityValues1, glm2._output._equalityConstraints);
       // check lessThanEqual to constraint
-      String[][] lessThanNames = new String[][]{{coeffNames.get(0), coeffNames.get(5), "constant"}};
-      double[][] lessThanValues = new double[][]{{2, 0.5, -1}};
-      assertCorrectConstraintContent(lessThanNames, lessThanValues, glm2._output._lessThanEqualToConstraints);
+      assertCorrectConstraintContent(_lessThanNames1, _lessThanValues1, glm2._output._lessThanEqualToConstraints);
     } finally {
       Scope.exit();
     }

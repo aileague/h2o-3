@@ -1475,6 +1475,8 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     public ConstrainedGLMUtils.LinearConstraints[] _equalityConstraints = null;
     public ConstrainedGLMUtils.LinearConstraints[] _lessThanEqualToConstraints = null;
     public ConstrainedGLMUtils.LinearConstraints[] _fromBetaConstraints = null;
+    public String[] _constraintCoefficientNames = null;
+    public double[][] _initConstraintMatrix = null;
     public boolean hasPValues(){return _zvalues != null;}
     public boolean hasVIF() { return _vif_predictor_names != null; }
 

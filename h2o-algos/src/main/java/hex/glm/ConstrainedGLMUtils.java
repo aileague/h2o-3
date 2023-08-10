@@ -182,12 +182,11 @@ public class ConstrainedGLMUtils {
   
   public static double[][] formConstraintMatrix(ComputationState state, List<String> constraintNamesList) {
     // extract coefficient names from constraints
-    extractConstraintCoeffs(state, constraintNamesList);
+    constraintNamesList.addAll(extractConstraintCoeffs(state));
     // form double matrix
     int constraintNameLen = constraintNamesList.size();
     double[][] initConstraintMatrix = new double[constraintNameLen][constraintNameLen];
     fillConstraintValues(state, constraintNamesList, initConstraintMatrix);
-    
     return initConstraintMatrix;
   }
   
@@ -214,28 +213,35 @@ public class ConstrainedGLMUtils {
     return rowIndex;
   }
   
-  public static List<String> extractConstraintCoeffs(ComputationState state, List<String> constraintCoeffName) {
+  public static List<String> extractConstraintCoeffs(ComputationState state) {
+    List<String> tConstraintCoeffName = new ArrayList<>();
+    boolean nonZeroConstant = false;
     if (state._fromBetaConstraints != null)   // extract coefficients constraints
-      extractCoeffNames(constraintCoeffName, state._fromBetaConstraints);
+      nonZeroConstant = nonZeroConstant | extractCoeffNames(tConstraintCoeffName, state._fromBetaConstraints);
 
     if (state._equalityConstraints != null)
-      extractCoeffNames(constraintCoeffName, state._equalityConstraints);
+      nonZeroConstant = nonZeroConstant | extractCoeffNames(tConstraintCoeffName, state._equalityConstraints);
 
     if (state._lessThanEqualToConstraints != null)
-      extractCoeffNames(constraintCoeffName, state._lessThanEqualToConstraints);
+      nonZeroConstant = nonZeroConstant | extractCoeffNames(tConstraintCoeffName, state._lessThanEqualToConstraints);
     
     // remove duplicates in the constraints names
-    Set<String> noDuplicateNames = new HashSet<>(constraintCoeffName);
+    Set<String> noDuplicateNames = new HashSet<>(tConstraintCoeffName);
+    if (!nonZeroConstant) // no non-Zero constant present
+      noDuplicateNames.remove("constant");
     return new ArrayList<>(noDuplicateNames);
   }
   
-  public static List<String> extractCoeffNames(List<String> coeffList, LinearConstraints[] constraints) {
+  public static boolean extractCoeffNames(List<String> coeffList, LinearConstraints[] constraints) {
     int numConst = constraints.length;
+    boolean nonZeroConstant = false;
     for (int index=0; index<numConst; index++) {
       Set<String> keys = constraints[index]._constraints.keySet();
       coeffList.addAll(keys);
+      if (keys.contains("constant"))
+        nonZeroConstant = constraints[index]._constraints.get("constant") != 0.0;
     }
-    return coeffList;
+    return nonZeroConstant;
   }
   
   public static boolean foundRedundantConstraints(final double[][] initConstraintMatrix) {
