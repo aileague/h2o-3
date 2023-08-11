@@ -158,14 +158,35 @@ public class GLMConstrainedTest extends TestUtil {
       // check that constraint matrix is extracted correctly
       List<String> constraintNames = Arrays.stream(glm2._output._constraintCoefficientNames).collect(Collectors.toList());
       double[][] initConstraintMatrix = glm2._output._initConstraintMatrix;
-      
+      // check rows from beta constraints
+      int rowIndex = 0;
+      assertCorrectConstraintMatrix(constraintNames, initConstraintMatrix, _betaConstraintNames1, _betaConstraintVal1, rowIndex);
+      // check rows from linear constraints with equality
+      rowIndex += _betaConstraintNames1.length;
+      assertCorrectConstraintMatrix(constraintNames, initConstraintMatrix, _equalityNames1, _equalityValues1, rowIndex);
+      // check row from linear contraints with lessThanEqualTo
+      rowIndex += _equalityNames1.length;
+      assertCorrectConstraintMatrix(constraintNames, initConstraintMatrix, _lessThanNames1, _lessThanValues1, rowIndex);
     } finally {
       Scope.exit();
     }
   }
   
-  public void assertCorrectConstraintMatrix(List<String> constraintNames, double[][] constraintMatrix, ) {
-    
+  public void assertCorrectConstraintMatrix(List<String> constraintNames, double[][] constraintMatrix,
+                                            String[][] origNames, double[][] originalValues, int rowStart) {
+    int numConstraints = origNames.length;
+    for (int index=0; index<numConstraints; index++) {
+      int rowIndex = index+rowStart;
+      String[] constNames = origNames[index];
+      double[] constValues = originalValues[index];
+      int numNames = constNames.length;
+      for (int index2=0; index2<numNames; index2++) {
+        int cNamesIndex = constraintNames.indexOf(constNames[index2]);
+        assert Math.abs(constraintMatrix[rowIndex][cNamesIndex]-constValues[index2])< EPS : 
+                "Expected valud: "+constValues[index2]+" for constraint "+constNames[index2]+" but actual: "
+                        +constraintMatrix[rowIndex][cNamesIndex];
+      }
+    }
   }
   
   // make sure we can get coefficient names without building a GLM model.  We compare the coefficient names
