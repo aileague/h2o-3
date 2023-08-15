@@ -1,6 +1,7 @@
 package hex.glm;
 
 import Jama.Matrix;
+import Jama.QRDecomposition;
 import hex.DataInfo;
 import water.DKV;
 import water.Iced;
@@ -184,8 +185,10 @@ public class ConstrainedGLMUtils {
     // extract coefficient names from constraints
     constraintNamesList.addAll(extractConstraintCoeffs(state));
     // form double matrix
-    int constraintNameLen = constraintNamesList.size();
-    double[][] initConstraintMatrix = new double[constraintNameLen][constraintNameLen];
+    int numRow = (state._fromBetaConstraints == null ? 0 : state._fromBetaConstraints.length) +
+            (state._equalityConstraints == null ? 0 : state._equalityConstraints.length) + 
+            (state._lessThanEqualToConstraints == null ? 0 : state._lessThanEqualToConstraints.length);
+    double[][] initConstraintMatrix = new double[numRow][constraintNamesList.size()];
     fillConstraintValues(state, constraintNamesList, initConstraintMatrix);
     return initConstraintMatrix;
   }
@@ -244,8 +247,11 @@ public class ConstrainedGLMUtils {
     return nonZeroConstant;
   }
   
-  public static boolean foundRedundantConstraints(final double[][] initConstraintMatrix) {
+  public static boolean foundRedundantConstraints(ComputationState state, final double[][] initConstraintMatrix) {
     Matrix constMatrix = new Matrix(initConstraintMatrix);
-    return false;
+    if (constMatrix.rank() < initConstraintMatrix.length) { // redundant constraints are specified
+      QRDecomposition qrDecomp = constMatrix.qr();
+    }
+    return true;
   }
 }

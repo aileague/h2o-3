@@ -1358,15 +1358,20 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
               " IRLSM/irlsm explicitly.");
     } else {
       // extract constraints from beta_constraints into one constraints
+      String[] coefNames = _dinfo.coefNames();
       if (_parms._beta_constraints != null) 
-        extractBetaConstraints(_state, _dinfo.coefNames());
+        extractBetaConstraints(_state, coefNames);
       // extract constraints from linear_constraints into equality of lessthanequalto constraints
       extractLinearConstraints(_state, _parms._linear_constraints, _dinfo);
       // make sure constraints have full rank.  If not, generate messages stating what constraints are redundant, error out
       List<String> constraintNames = new ArrayList<>();
       _initConstraintMatrix = formConstraintMatrix(_state, constraintNames);
       _constraintCoefficientNames = constraintNames.toArray(new String[0]);
-      if (foundRedundantConstraints(_initConstraintMatrix))
+      if (_initConstraintMatrix.length > coefNames.length)
+        warn("number of constraints", " exceeds the number of coefficients.  The system is" +
+                " over-constraints and probably may not yield a valid solution.  Consider reducing the number of" +
+                " constraints.");
+      if (foundRedundantConstraints(_state, _initConstraintMatrix))
         ;
         
     }

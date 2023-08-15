@@ -30,6 +30,7 @@ public class GLMConstrainedTest extends TestUtil {
   Frame _betaConstraint1;
   Frame _linearConstraint1;
   Frame _linearConstraint2;
+  Frame _linearConstraint3;
   List<String> _coeffNames1;
   String[][] _betaConstraintNames1;
   double[][] _betaConstraintValStandard1;
@@ -101,7 +102,56 @@ public class GLMConstrainedTest extends TestUtil {
             {2/train.vec(_coeffNames1.get(40)).sigma(), -0.1/train.vec(_coeffNames1.get(41)).sigma(),
                     -0.4/train.vec(_coeffNames1.get(42)).sigma(), 0.8}};
   }
-  
+
+  public void generateConstraintFrameNAnswer(Frame train) {
+    // Constraints in the linear_constraints, 
+    // a. -0.3*beta_0+0.5*beta_1+1*beta_3-3 <= 0; 
+    // b. 3*beta_8-4*beta_36+0.5*beta_37 <= 0, 
+    // c.0.1*beta_38-0.2*beta_39==0, 
+    // d. 2*beta_40-0.1*beta_41-0.4*beta_42+0.8 <= 0;
+    // e. 0.1*beta_4-0.5*beta_5+0.7*beta_6-1.1 == 0; 
+    // f. 2*beta_6+0.5*beta_43-0.3*beta_7 == 0 
+    // g. 0.5*beta_36-1.5*beta_38-0.3 == 0  
+    // h. 4*beta_40-0.2*beta_41-0.8*beta_42+1.6 <= 0; redundant to constraint d
+    // i. 1.5*beta_36-4.5*beta_38-1.2 == 0; redundant to constraint g
+    _linearConstraint2 = new TestFrameBuilder()
+            .withColNames("names", "values", "types", "constraint_numbers")
+            .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
+            .withDataForCol(0, new String[] {_coeffNames1.get(0), _coeffNames1.get(1), _coeffNames1.get(3),
+                    "constant", _coeffNames1.get(8), _coeffNames1.get(36), _coeffNames1.get(37), _coeffNames1.get(38),
+                    _coeffNames1.get(39), _coeffNames1.get(40), _coeffNames1.get(41), _coeffNames1.get(42), "constant",
+                    _coeffNames1.get(4), _coeffNames1.get(5), _coeffNames1.get(6), "constant", _coeffNames1.get(6),
+                    _coeffNames1.get(43), _coeffNames1.get(7), _coeffNames1.get(36), _coeffNames1.get(38), "constant"})
+            .withDataForCol(1, new double [] {-0.3, 0.5, 1.0, -3.0, 3, -4, 0.5, 0.1, -0.2, 2.0, -0.1, -0.4,
+                    0.8, 0.1, -0.5, 0.7, -1.1, 2.0, 0.5, -0.3, 0.5, -1.5, -0.3})
+            .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "lessthanequal",
+                    "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "lessthanequal",
+                    "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "equal", "equal", "equal",
+                    "equal", "equal", "equal", "equal", "equal"})
+            .withDataForCol(3, new int[]{0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6,
+                    6}).build();
+    Scope.track(_linearConstraint2);
+    _equalityNames2 = new String[][]{{_coeffNames1.get(38), _coeffNames1.get(39), "constant"},
+            {_coeffNames1.get(4), _coeffNames1.get(5), _coeffNames1.get(6), "constant"},
+            {_coeffNames1.get(6), _coeffNames1.get(43), _coeffNames1.get(7), "constant"},
+            {_coeffNames1.get(36), _coeffNames1.get(38), "constant"}};
+    _equalityValues2 = new double[][]{{0.1, -0.2, 0.0}, {0.1, -0.5, 0.7, -1.1}, {2, 0.5, -0.3, 0.0},
+            {0.5, -1.5, -0.3}};
+    _equalityValuesStandard2 = new double[][]{{-0.3, 0.5, 1, -3},
+            {3, -4/train.vec(_coeffNames1.get(36)).sigma(), 0.5/train.vec(_coeffNames1.get(37)).sigma(), 0.0},
+            {2/train.vec(_coeffNames1.get(40)).sigma(), -0.1/train.vec(_coeffNames1.get(41)).sigma(),
+                    -0.4/train.vec(_coeffNames1.get(42)).sigma(), 0.8}};
+    _lessThanNames2 = new String[][]{{_coeffNames1.get(0), _coeffNames1.get(1), _coeffNames1.get(3),
+            "constant"}, {_coeffNames1.get(8), _coeffNames1.get(36), _coeffNames1.get(37), "constant"},
+            {_coeffNames1.get(40), _coeffNames1.get(41), _coeffNames1.get(42), "constant"}};
+    _lessThanValues2 = new double[][]{{-0.3, 0.5, 1, -3}, {3, -4, 0.5, 0.0}, {2, -0.1, -0.4, 0.8}};
+    _lessThanValuesStandard2 = new double[][]{{-0.3, 0.5, 1, -3},
+            {3, -4/train.vec(_coeffNames1.get(36)).sigma(), 0.5/train.vec(_coeffNames1.get(37)).sigma(), 0.0},
+            {2/train.vec(_coeffNames1.get(40)).sigma(), -0.1/train.vec(_coeffNames1.get(41)).sigma(),
+                    -0.4/train.vec(_coeffNames1.get(42)).sigma(), 0.8}};
+  }
+
+
   public void generateConstraint1FrameNAnswer(Frame train) {
     int coefLen = _coeffNames1.size()-1;
     // there are 5 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
