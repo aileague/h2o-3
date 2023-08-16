@@ -1371,9 +1371,12 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         warn("number of constraints", " exceeds the number of coefficients.  The system is" +
                 " over-constraints and probably may not yield a valid solution.  Consider reducing the number of" +
                 " constraints.");
-      if (foundRedundantConstraints(_state, _initConstraintMatrix))
-        ;
-        
+      List<String> redundantConstraints = foundRedundantConstraints(_state, _initConstraintMatrix);
+      if (redundantConstraints != null) {
+        int numRedundant = redundantConstraints.size();
+        for (int index=0; index<numRedundant; index++)
+          error("redundant linear constraints", redundantConstraints.get(index));
+      }
     }
   }
   

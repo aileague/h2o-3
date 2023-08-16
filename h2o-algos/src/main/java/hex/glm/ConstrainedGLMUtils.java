@@ -1,7 +1,6 @@
 package hex.glm;
 
 import Jama.Matrix;
-import Jama.QRDecomposition;
 import hex.DataInfo;
 import water.DKV;
 import water.Iced;
@@ -10,7 +9,10 @@ import water.Scope;
 import water.fvec.Frame;
 import water.util.IcedHashMap;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -247,11 +249,65 @@ public class ConstrainedGLMUtils {
     return nonZeroConstant;
   }
   
-  public static boolean foundRedundantConstraints(ComputationState state, final double[][] initConstraintMatrix) {
+  public static List<String> foundRedundantConstraints(ComputationState state, final double[][] initConstraintMatrix) {
     Matrix constMatrix = new Matrix(initConstraintMatrix);
-    if (constMatrix.rank() < initConstraintMatrix.length) { // redundant constraints are specified
-      QRDecomposition qrDecomp = constMatrix.qr();
+    Matrix constMatrixTConstMatrix = constMatrix.times(constMatrix.transpose());
+    int rank = constMatrix.rank();
+    if (rank < initConstraintMatrix.length) { // redundant constraints are specified
+      double[][] rMatVal = constMatrixTConstMatrix.qr().getR().getArray();
+      List<Double> diag = IntStream.range(0, rMatVal.length).mapToDouble(x->Math.abs(rMatVal[x][x])).boxed().collect(Collectors.toList());
+      int[] sortedIndices = IntStream.range(0, diag.size()).boxed().sorted((i, j) -> diag.get(i).compareTo(diag.get(j))).mapToInt(ele->ele).toArray();
+      List<Integer> duplicatedEleIndice = IntStream.range(0, diag.size()-rank).map(x -> sortedIndices[x]).boxed().collect(Collectors.toList());
+      return genRedundantConstraint(state, duplicatedEleIndice);
     }
-    return true;
+    return null;
+  }
+  
+  public static List<String> genRedundantConstraint(ComputationState state, List<Integer> duplicatedEleIndics) {
+    List<String> redundantConstraint = new ArrayList<>();
+    int numRedEle = duplicatedEleIndics.size();
+    for (Integer redIndex : duplicatedEleIndics)
+      redundantConstraint.add(grabRedundantConstraintMessage(state, redIndex));
+
+    return redundantConstraint;
+  }
+  
+  public static String grabRedundantConstraintMessage(ComputationState state, Integer constraintIndex) {
+    // figure out which constraint among state._fromBetaConstraints, state._equalityConstraints, 
+    // state._lessThanEqualToConstraints is actually redundant
+    LinearConstraints redundantConst = getConstraintFromIndex(state, constraintIndex);
+    if (redundantConst != null) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("This constraint is redundant ");
+      
+      sb.append(" Please remove it from your beta/linear constraints.");
+      return sb.toString();
+    } else {
+       return null;
+    }
+  }
+  
+  public static LinearConstraints getConstraintFromIndex(ComputationState state, Integer constraintIndex) {
+    int constIndexWOffset = constraintIndex;
+    if (state._fromBetaConstraints != null) {
+      if (constIndexWOffset < state._fromBetaConstraints.length) {
+        return state._fromBetaConstraints[constIndexWOffset];
+      } else {
+        constIndexWOffset -= state._fromBetaConstraints.length;
+      }
+    }
+    
+    if (state._equalityConstraints != null) {
+      if (constIndexWOffset < state._equalityConstraints.length) {
+        return state._equalityConstraints[constIndexWOffset];
+      } else {
+        constIndexWOffset -= state._equalityConstraints.length;
+      }
+    }
+    
+    if (state._lessThanEqualToConstraints != null && constIndexWOffset < state._lessThanEqualToConstraints.length) {
+      return state._lessThanEqualToConstraints[constIndexWOffset];
+    }
+    return null;
   }
 }
