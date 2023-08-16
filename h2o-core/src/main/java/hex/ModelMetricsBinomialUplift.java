@@ -112,7 +112,7 @@ public class ModelMetricsBinomialUplift extends ModelMetricsSupervised {
         }
     }
 
-    // helper to build a ModelMetricsBinomial for a N-class problem from a Frame that contains N per-class probability columns, and the actual label as the (N+1)-th column
+    // helper to build a ModelMetricsBinomialUplift from a Frame that contains prediction probability column and the actual label
     private static class UpliftBinomialMetrics extends MRTask<UpliftBinomialMetrics> {
         String[] domain;
         double[] thresholds;
@@ -133,7 +133,7 @@ public class ModelMetricsBinomialUplift extends ModelMetricsSupervised {
             for (int i=0; i<chks[0]._len;++i) {
                 ds[0] = uplift.atd(i);
                 acts[0] = (float) actuals.atd(i);
-                acts[1] = (float )treatment.atd(i);
+                acts[1] = (float) treatment.atd(i);
                 _mb.perRow(ds, acts, 1, 0, null);
             }
         }
@@ -146,15 +146,10 @@ public class ModelMetricsBinomialUplift extends ModelMetricsSupervised {
 
         public MetricBuilderBinomialUplift( String[] domain, double[] thresholds) { 
             super(2,domain); 
-            if(thresholds != null) {
-                _auuc = new AUUC.AUUCBuilder(thresholds);
-            }
+            assert thresholds != null: "Thresholds should not be null for metric creation.";
+            _auuc = new AUUC.AUUCBuilder(thresholds);
         }
-
-        public MetricBuilderBinomialUplift( String[] domain) {
-            super(2,domain);
-        }
-
+        
         @Override public double[] perRow(double[] ds, float[] yact, Model m) {
             return perRow(ds, yact,1, 0, m);
         }
