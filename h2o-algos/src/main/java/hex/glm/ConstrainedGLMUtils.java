@@ -301,7 +301,8 @@ public class ConstrainedGLMUtils {
             if (constrVal > 0)
               sb.append('+');
 
-            if (standardize && !"constant".equals(coefName)) {  // linearconstraint that needs standardization
+            // linearconstraint for numerical columns only that needs standardization
+            if (standardize && !"constant".equals(coefName) && trainNames.contains(coefName)) {
               int colInd = trainNames.indexOf(coefName) - dinfo._cats;
               sb.append(constrVal/dinfo._normMul[colInd]);
             } else {  // no standardization or standardization but coefName is constant
