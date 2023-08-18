@@ -28,10 +28,10 @@ import static water.fvec.Vec.T_STR;
 public class GLMConstrainedTest extends TestUtil {
   public static final double EPS = 1e-6;
   Frame _betaConstraint1;
+  Frame _betaConstraint2;
   Frame _linearConstraint1;
   Frame _linearConstraint2;
   Frame _linearConstraint3;
-  Frame _linearConstraint4;
   List<String> _coeffNames1;
   String[][] _betaConstraintNames1;
   double[][] _betaConstraintValStandard1;
@@ -57,39 +57,6 @@ public class GLMConstrainedTest extends TestUtil {
     generateConstraint1FrameNAnswer(train);
     generateConstraint2FrameNAnswer(train);
     generateConstraint3FrameNAnswer();
-    generateConstraint4FrameNAnswer();
-  }
-
-
-  public void generateConstraint4FrameNAnswer() {
-    // Constraints in the linear_constraints, 
-    // a. -0.3*beta_0+0.5*beta_1+1*beta_3-3 <= 0; 
-    // b. 3*beta_8-4*beta_36+0.5*beta_37 <= 0, 
-    // c.0.1*beta_38-0.2*beta_39==0, 
-    // d. 2*beta_40-0.1*beta_41-0.4*beta_42+0.8 <= 0;
-    // e. 0.1*beta_4-0.5*beta_5+0.7*beta_6-1.1 == 0; 
-    // f. 2*beta_6+0.5*beta_43-0.3*beta_7 == 0 
-    // g. 0.5*beta_36-1.5*beta_38-0.3 == 0    
-    // h. -beta_1+betaCoefLen-3-9.0 <= 0
-    int coefLen = _coeffNames1.size();
-    _linearConstraint4 = new TestFrameBuilder()
-            .withColNames("names", "values", "types", "constraint_numbers")
-            .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
-            .withDataForCol(0, new String[] {_coeffNames1.get(0), _coeffNames1.get(1), _coeffNames1.get(3),
-                    "constant", _coeffNames1.get(8), _coeffNames1.get(36), _coeffNames1.get(37), _coeffNames1.get(38),
-                    _coeffNames1.get(39), _coeffNames1.get(40), _coeffNames1.get(41), _coeffNames1.get(42), "constant",
-                    _coeffNames1.get(4), _coeffNames1.get(5), _coeffNames1.get(6), "constant", _coeffNames1.get(6),
-                    _coeffNames1.get(43), _coeffNames1.get(7), _coeffNames1.get(36), _coeffNames1.get(38), "constant",
-                    _coeffNames1.get(1), _coeffNames1.get(coefLen-3), "constant"})
-            .withDataForCol(1, new double [] {-0.3, 0.5, 1.0, -3.0, 3, -4, 0.5, 0.1, -0.2, 2.0, -0.1, -0.4,
-                    0.8, 0.1, -0.5, 0.7, -1.1, 2.0, 0.5, -0.3, 0.5, -1.5, -0.3, -1.0, 1.0, -9.0})
-            .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal", "lessthanequal",
-                    "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "lessthanequal",
-                    "lessthanequal", "lessthanequal", "lessthanequal", "equal", "equal", "equal", "equal", "equal",
-                    "equal", "equal", "equal", "equal", "equal", "lessthanequal", "lessthanequal", "lessthanequal"})
-            .withDataForCol(3, new int[]{0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6,
-                    6, 7, 7 ,7}).build();
-    Scope.track(_linearConstraint2);
   }
 
   public void generateConstraint2FrameNAnswer(Frame train) {
@@ -178,23 +145,22 @@ public class GLMConstrainedTest extends TestUtil {
             .withDataForCol(3, new int[]{0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6, 6,
                     6, 7, 7, 7, 7, 8, 8, 8}).build();
     Scope.track(_linearConstraint2);
-
   }
   
   public void generateConstraint1FrameNAnswer(Frame train) {
     int coefLen = _coeffNames1.size()-1;
-    // there are 5 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
-    // 0 <= betacoefLen-1 <= 2.0, 0.1 == betacoefLen-2 == 0.1.  This will be translated into the following standard
+    // there are 4 constraints in the beta constraints: 1.0 <= beta0 <= 10.0, -1.0 <= beta1, betacoefLen <= 8.0,
+    //  0.1 == betacoefLen-2 == 0.1.  This will be translated into the following standard
     // form: 1.0-beta0 <= 0; beta0-10.0 <= 0, -1.0 -beta1 <= 0, betacoefLen-8.0 <= 0, 0-betacoefLen-1 <= 0,
-    // betacoefLen-1-2.0 <= 0, betacoefLen-2-0.1 == 0.
+    //  betacoefLen-2-0.1 == 0.
     _betaConstraint1 =
             new TestFrameBuilder()
                     .withColNames("names", "lower_bounds", "upper_bounds")
                     .withVecTypes(T_STR, T_NUM, T_NUM)
                     .withDataForCol(0, new String[] {_coeffNames1.get(0), _coeffNames1.get(1),
-                            _coeffNames1.get(coefLen-3), _coeffNames1.get(coefLen-2), _coeffNames1.get(coefLen-1)})
-                    .withDataForCol(1, new double [] {1.0, -1.0, Double.NEGATIVE_INFINITY, 0.0, 0.1})
-                    .withDataForCol(2, new double[] {10.0, Double.POSITIVE_INFINITY, 8.0, 2.0, 0.1}).build();
+                            _coeffNames1.get(coefLen-3), _coeffNames1.get(coefLen-1)})
+                    .withDataForCol(1, new double [] {1.0, -1.0, Double.NEGATIVE_INFINITY, 0.1})
+                    .withDataForCol(2, new double[] {10.0, Double.POSITIVE_INFINITY, 8.0, 0.1}).build();
     Scope.track(_betaConstraint1);
     // there are two constraints in the linear_constraints, the first one is 2*beta_0+0.5*beta_5 -1<= 0, the second 
     // one is 0.5*beta_36-1.5*beta_38 == 0
@@ -210,13 +176,11 @@ public class GLMConstrainedTest extends TestUtil {
     // form correct constraints names and values:
     _betaConstraintNames1 = new String[][]{{_coeffNames1.get(0), "constant"}, {_coeffNames1.get(0), "constant"},
             {_coeffNames1.get(1), "constant"}, {_coeffNames1.get(coefLen-3), "constant"},
-            {_coeffNames1.get(coefLen-2), "constant"}, {_coeffNames1.get(coefLen-2), "constant"},
             {_coeffNames1.get(coefLen-1), "constant"}};
     _betaConstraintValStandard1 = new double[][]{{-1,1}, {1,-10}, {-1,-1},
             {1.0,-8*train.vec(_coeffNames1.get(coefLen-3)).sigma()},
-            {-1,0*train.vec(_coeffNames1.get(coefLen-2)).sigma()},
-            {1,-2.0*train.vec(_coeffNames1.get(coefLen-2)).sigma()}, {1,-0.1*train.vec(_coeffNames1.get(coefLen-1)).sigma()}};
-    _betaConstraintVal1 = new double[][]{{-1,1}, {1,-10}, {-1,-1}, {1,-8}, {-1,0}, {1,-2}, {1,-0.1}};
+            {1,-0.1*train.vec(_coeffNames1.get(coefLen-1)).sigma()}};
+    _betaConstraintVal1 = new double[][]{{-1,1}, {1,-10}, {-1,-1}, {1,-8}, {1,-0.1}};
 
     _equalityNames1 = new String[][]{{_coeffNames1.get(36), _coeffNames1.get(38), "constant"}};
     _equalityValuesStandard1 = new double[][]{{0.5/train.vec(_coeffNames1.get(36)).sigma(),
@@ -226,7 +190,6 @@ public class GLMConstrainedTest extends TestUtil {
     _lessThanNames1 = new String[][]{{_coeffNames1.get(0), _coeffNames1.get(5), "constant"}};
     _lessThanValuesStandard1 = new double[][]{{2, 0.5, -1}};
     _lessThanValues1 = new double[][]{{2, 0.5, -1}};
-
   }
   
   public List<String> createCoeffNames(Frame train) {
@@ -269,9 +232,11 @@ public class GLMConstrainedTest extends TestUtil {
       params._expose_constraints = true;
       params._linear_constraints = linear_constraints._key;
       GLMModel glm2 = new GLM(params).trainModel().get();
+      Scope.track_generic(glm2);
       assert 1==2 : "Should have thrown an error due to duplicated constraints.";
-    } catch(Exception ex) {
-
+    } catch(IllegalArgumentException ex) {
+      assert ex.getMessage().contains("redundant linear constraints") : "Wrong error message.  Error should be about" +
+              " redundant linear constraints";
     } finally {
       Scope.exit();
     }
@@ -287,24 +252,26 @@ public class GLMConstrainedTest extends TestUtil {
         train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
       DKV.put(train);
       GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
-      params._standardize = false;
+      params._standardize = true;
       params._response_column = "C21";
       params._solver = IRLSM;
       params._train = train._key;
       params._max_iterations = 1;
       params._expose_constraints = true;
-      params._linear_constraints = _linearConstraint4._key;
-      params._beta_constraints = _betaConstraint1._key;
+      params._linear_constraints = _linearConstraint3._key;
+      params._beta_constraints = _betaConstraint2._key;
       GLMModel glm2 = new GLM(params).trainModel().get();
+      Scope.track_generic(glm2);
       assert 1==2 : "Should have thrown an error due to duplicated constraints.";
-    } catch(Exception ex) {
-
+    } catch(IllegalArgumentException ex) {
+      assert ex.getMessage().contains("redundant linear constraints") : "Wrong error message.  Error should be about" +
+              " redundant linear constraints";
     } finally {
       Scope.exit();
     }
   }
 
-
+ 
   // make sure correct constraint matrix is formed after extracting constraints from linear constraints
   @Test
   public void testLinearConstraintMatrix() {

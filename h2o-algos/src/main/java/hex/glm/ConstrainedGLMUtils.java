@@ -9,10 +9,7 @@ import water.Scope;
 import water.fvec.Frame;
 import water.util.IcedHashMap;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -271,19 +268,57 @@ public class ConstrainedGLMUtils {
 
     return redundantConstraint;
   }
-  
+
   public static String grabRedundantConstraintMessage(ComputationState state, Integer constraintIndex) {
     // figure out which constraint among state._fromBetaConstraints, state._equalityConstraints, 
     // state._lessThanEqualToConstraints is actually redundant
     LinearConstraints redundantConst = getConstraintFromIndex(state, constraintIndex);
     if (redundantConst != null) {
+      boolean isBetaConstraint = redundantConst._constraints.size() < 3 ? true : false;
+      boolean standardize = state.activeData()._normMul != null ? true : false;
       StringBuilder sb = new StringBuilder();
+      DataInfo dinfo = state.activeData();
+      List<String> trainNames = Arrays.stream(dinfo._adaptedFrame.names()).collect(Collectors.toList());
       sb.append("This constraint is redundant ");
       
+      if (isBetaConstraint && standardize) {  // beta constraint and standardization is needed
+        double constantVal = 0;
+        int colIndex = 0;
+        for (String coefName : redundantConst._constraints.keySet()) {
+          double constrVal = redundantConst._constraints.get(coefName);
+          if ("constant".equals(coefName)) {
+            constantVal = constrVal;
+          } else {
+            colIndex = trainNames.indexOf(coefName)-dinfo._cats;
+            sb.append(coefName);  // coefficient value is always 1.
+          }
+        }
+        sb.append(constantVal*dinfo._normMul[colIndex]);
+      } else {  // beta constraint without standardization or linear constraint with or without standardization
+        for (String coefName : redundantConst._constraints.keySet()) {
+          double constrVal = redundantConst._constraints.get(coefName);
+          if (constrVal != 0) {
+            if (constrVal > 0)
+              sb.append('+');
+
+            if (standardize && !"constant".equals(coefName)) {  // linearconstraint that needs standardization
+              int colInd = trainNames.indexOf(coefName) - dinfo._cats;
+              sb.append(constrVal/dinfo._normMul[colInd]);
+            } else {  // no standardization or standardization but coefName is constant
+              sb.append(constrVal);
+            }
+            if (!"constant".equals(coefName)) {
+              sb.append('*');
+              sb.append(coefName);
+            }
+          }
+        }
+      }
+      sb.append(" <= or == 0.");
       sb.append(" Please remove it from your beta/linear constraints.");
       return sb.toString();
     } else {
-       return null;
+      return null;
     }
   }
   
