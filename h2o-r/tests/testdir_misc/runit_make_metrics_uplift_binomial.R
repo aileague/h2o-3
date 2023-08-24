@@ -25,12 +25,14 @@ test.make_metrics_uplift_binomial <- function() {
     pred <- h2o.assign(h2o.predict(model,train)[,1],"pred")
     actual <- h2o.assign(train[,response],"act")
     treat <- h2o.assign(train[,treatment],"treatment")
-    
-    m0 <- h2o.make_metrics(pred, actual, treatment=treatment)
+
+    thresholds <- model@model$default_auuc_thresholds
+
+    m0 <- h2o.make_metrics(pred, actual, treatment=treat, custom_auuc_thresholds=thresholds)
     print(m0)
-    m1 <- h2o.performance(model, train)
-    print(m1)
     
+    m1 <- h2o.performance(model, train, custom_auuc_thresholds=thresholds)
+    print(m1)
     auuc0 <- h2o.auuc(m0)
     auuc1 <- h2o.auuc(m1)
  
