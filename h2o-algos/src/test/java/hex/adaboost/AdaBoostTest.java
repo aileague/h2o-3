@@ -26,7 +26,7 @@ import static org.junit.Assert.assertNotNull;
 @RunWith(H2ORunner.class)
 public class AdaBoostTest extends TestUtil {
     
-    public boolean print = false;
+    public boolean print = true;
 
     @Rule
     public EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -222,8 +222,11 @@ public class AdaBoostTest extends TestUtil {
             Scope.enter();
             Frame train = parseTestFile("smalldata/testng/airlines_train_preprocessed.csv");
             Scope.track(train);
+            Frame test = parseTestFile("smalldata/testng/airlines_test_preprocessed.csv");
+            Scope.track(test);
             String response = "IsDepDelayed";
             train.toCategoricalCol(response);
+            test.toCategoricalCol(response);
             AdaBoostModel.AdaBoostParameters p = new AdaBoostModel.AdaBoostParameters();
             p._train = train._key;
             p._seed = 0xDECAF;
@@ -235,7 +238,7 @@ public class AdaBoostTest extends TestUtil {
             Scope.track_generic(adaBoostModel);
             assertNotNull(adaBoostModel);
 
-            Frame score = adaBoostModel.score(train);
+            Frame score = adaBoostModel.score(test);
             Scope.track(score);
             toCSV(score, "../airlinesscore.csv");
         } finally {
@@ -249,8 +252,11 @@ public class AdaBoostTest extends TestUtil {
             Scope.enter();
             Frame train = parseTestFile("smalldata/higgs/higgs_train_5k.csv");
             Scope.track(train);
+            Frame test = parseTestFile("smalldata/higgs/higgs_test_5k.csv");
+            Scope.track(test);
             String response = "response";
             train.toCategoricalCol(response);
+            test.toCategoricalCol(response);
             AdaBoostModel.AdaBoostParameters p = new AdaBoostModel.AdaBoostParameters();
             p._train = train._key;
             p._seed = 0xDECAF;
@@ -262,7 +268,7 @@ public class AdaBoostTest extends TestUtil {
             Scope.track_generic(adaBoostModel);
             assertNotNull(adaBoostModel);
 
-            Frame score = adaBoostModel.score(train);
+            Frame score = adaBoostModel.score(test);
             Scope.track(score);
             toCSV(score, "../higgsscore.csv");
         } finally {
