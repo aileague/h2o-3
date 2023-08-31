@@ -15,8 +15,6 @@ import water.fvec.TestFrameBuilder;
 import water.fvec.Vec;
 import water.runner.CloudSize;
 import water.runner.H2ORunner;
-import water.util.FrameUtils;
-import water.util.VecUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,7 +48,7 @@ public class AdaBoostTest extends TestUtil {
             AdaBoostModel.AdaBoostParameters p = new AdaBoostModel.AdaBoostParameters();
             p._train = train._key;
             p._seed = 0xDECAF;
-            p._n_estimators = 1;
+            p._n_estimators = 50;
             p._response_column = response;
 
             AdaBoost adaBoost = new AdaBoost(p);
