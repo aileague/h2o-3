@@ -248,9 +248,11 @@ public class ConstrainedGLMUtils {
   
   public static List<String> foundRedundantConstraints(ComputationState state, final double[][] initConstraintMatrix) {
     Matrix constMatrix = new Matrix(initConstraintMatrix);
-    Matrix constMatrixTConstMatrix = constMatrix.times(constMatrix.transpose());
-    int rank = constMatrix.rank();
-    if (rank < initConstraintMatrix.length) { // redundant constraints are specified
+    //Matrix constMatrixTConstMatrix = constMatrix.times(constMatrix.transpose());
+    Matrix constMatrixLessConstant = constMatrix.getMatrix(0, constMatrix.getRowDimension() -1, 1, constMatrix.getColumnDimension()-1);
+    Matrix constMatrixTConstMatrix = constMatrixLessConstant.times(constMatrixLessConstant.transpose());
+    int rank = constMatrixLessConstant.rank();
+    if (rank < constMatrix.getRowDimension()) { // redundant constraints are specified
       double[][] rMatVal = constMatrixTConstMatrix.qr().getR().getArray();
       List<Double> diag = IntStream.range(0, rMatVal.length).mapToDouble(x->Math.abs(rMatVal[x][x])).boxed().collect(Collectors.toList());
       int[] sortedIndices = IntStream.range(0, diag.size()).boxed().sorted((i, j) -> diag.get(i).compareTo(diag.get(j))).mapToInt(ele->ele).toArray();

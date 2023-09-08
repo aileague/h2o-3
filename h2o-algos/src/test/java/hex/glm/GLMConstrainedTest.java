@@ -244,6 +244,56 @@ public class GLMConstrainedTest extends TestUtil {
   public void teardown() {
     Scope.exit();
   }
+  
+  // beta and linear constraints conflict and we should catch it
+  @Test
+  public void testConflictConstraints() {
+    Scope.enter();
+    try {
+      // beta constraints: beta0 >= 2, beta1 >= 2
+      Frame betaConstraint =
+              new TestFrameBuilder()
+                      .withColNames("names", "lower_bounds", "upper_bounds")
+                      .withVecTypes(T_STR, T_NUM, T_NUM)
+                      .withDataForCol(0, new String[] {_coeffNames1.get(40), _coeffNames1.get(41)})
+                      .withDataForCol(1, new double [] {2, 2})
+                      .withDataForCol(2, new double[] {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY}).build();
+      Scope.track(betaConstraint);
+
+      // linear constraint: beta0 + beta1 <= 2, contradicts with beta0 >= 2 and beta1 >= 2
+      Frame linearConstraint = new TestFrameBuilder()
+              .withColNames("names", "values", "types", "constraint_numbers")
+              .withVecTypes(T_STR, T_NUM, T_STR, T_NUM)
+              .withDataForCol(0, new String[] {_coeffNames1.get(40), _coeffNames1.get(41), "constant"})
+              .withDataForCol(1, new double [] {1,1,-2})
+              .withDataForCol(2, new String[] {"lessthanequal", "lessthanequal", "lessthanequal"})
+              .withDataForCol(3, new int[]{0,0,0}).build();
+      Scope.track(linearConstraint);
+      
+      Frame train = parseAndTrackTestFile("smalldata/glm_test/gaussian_20cols_10000Rows.csv");
+      int[] catCol = new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+      for (int colInd : catCol)
+        train.replace((colInd), train.vec(colInd).toCategoricalVec()).remove();
+      DKV.put(train);
+      GLMModel.GLMParameters params = new GLMModel.GLMParameters(gaussian);
+      params._standardize = false;
+      params._response_column = "C21";
+      params._solver = IRLSM;
+      params._train = train._key;
+      params._beta_constraints = betaConstraint._key;
+      params._max_iterations = 1;
+      params._expose_constraints = true;
+      params._linear_constraints = linearConstraint._key;
+      GLMModel glm2 = new GLM(params).trainModel().get();
+      Scope.track_generic(glm2);
+      assert 1==2 : "Should have thrown an error due to duplicated constraints.";
+    } catch(IllegalArgumentException ex) {
+      assert ex.getMessage().contains("redundant and possibly conflicting linear constraints") : "Wrong error message.  Error should be about" +
+              " redundant linear constraints";
+    } finally {
+      Scope.exit();
+    }
+  }
 
   // linear constraints with two duplicated constraints
   @Test
@@ -268,7 +318,7 @@ public class GLMConstrainedTest extends TestUtil {
       Scope.track_generic(glm2);
       assert 1==2 : "Should have thrown an error due to duplicated constraints.";
     } catch(IllegalArgumentException ex) {
-      assert ex.getMessage().contains("redundant linear constraints") : "Wrong error message.  Error should be about" +
+      assert ex.getMessage().contains("redundant and possibly conflicting linear constraints") : "Wrong error message.  Error should be about" +
               " redundant linear constraints";
     } finally {
       Scope.exit();
@@ -297,7 +347,7 @@ public class GLMConstrainedTest extends TestUtil {
       Scope.track_generic(glm2);
       assert 1==2 : "Should have thrown an error due to duplicated constraints.";
     } catch(IllegalArgumentException ex) {
-      assert ex.getMessage().contains("redundant linear constraints") : "Wrong error message.  Error should be about" +
+      assert ex.getMessage().contains("redundant and possibly conflicting linear constraints") : "Wrong error message.  Error should be about" +
               " redundant linear constraints";
     } finally {
       Scope.exit();

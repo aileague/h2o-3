@@ -17,7 +17,7 @@ def test_redundant_constraints():
     except Exception as ex:
         print(ex)
         temp = str(ex)
-        assert ("redundant linear constraints" in temp), "Wrong exception was received."
+        assert ("redundant and possibly conflicting linear constraints" in temp), "Wrong exception was received."
         print("redundant constraint test passed!")
 
 if __name__ == "__main__":
