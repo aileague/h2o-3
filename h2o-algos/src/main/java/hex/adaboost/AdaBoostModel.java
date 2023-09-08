@@ -23,7 +23,7 @@ public class AdaBoostModel extends Model<AdaBoostModel, AdaBoostModel.AdaBoostPa
         if (_output.getModelCategory() == ModelCategory.Binomial) {
             return new ModelMetricsBinomial.MetricBuilderBinomial(domain);
         }
-        throw H2O.unimpl();
+        throw H2O.unimpl("AdaBoost currently support only binary classification");
     }
 
     @Override
